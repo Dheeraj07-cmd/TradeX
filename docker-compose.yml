@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+
+  backend:
+    build: ./trading-dashboard/backend
+    container_name: tradex-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb+srv://trading_user:trading_user123@cluster0.3h8p0nc.mongodb.net/tradingdb
+      - JWT_SECRET=12345678901234567890123456789012
+      - JWT_EXPIRATION=3600000
+
+  frontend:
+    build: ./frontend/tradingfrontend
+    container_name: tradex-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
