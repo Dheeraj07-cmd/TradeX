@@ -42,9 +42,7 @@ public class OrderService {
         double price = order.getPrice();
         String mode = order.getMode();
 
-        /*
-            HOLDINGS LOGIC
-            */
+        /* HOLDINGS LOGIC */
 
         Optional<Holding> holdingOpt =
                 holdingRepository.findByUserIdAndName(userId, stock);
@@ -101,8 +99,7 @@ public class OrderService {
     }
 
 
-        /*  POSITIONS LOGIC
-           */
+        /*  POSITIONS LOGIC */
 
         Optional<Position> posOpt =
                 positionRepository.findByUserIdAndName(userId, stock);
@@ -178,14 +175,11 @@ public class OrderService {
                 "/topic/portfolio/" + userId,
                 "update"
         );
-        System.out.println("Sending WebSocket update to user: " + userId);
 
         return savedOrder;
     }
 
-    /*
-        REALIZED P&L (ORDERS)
-       */
+    /* REALIZED P&L (ORDERS) */
 
     public double calculateRealizedPnl(String userId) {
 
@@ -226,8 +220,7 @@ public class OrderService {
         return realizedPnl;
     }
 
-    /*  UNREALIZED P&L (ORDERS)
-           */
+    /* UNREALIZED P&L (ORDERS) */
     public double calculateUnrealizedPnl(String userId) {
 
         List<Position> positions =

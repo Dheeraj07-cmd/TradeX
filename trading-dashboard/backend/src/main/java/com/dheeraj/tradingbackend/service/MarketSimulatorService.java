@@ -82,10 +82,7 @@ public class MarketSimulatorService {
                 .map(Position::getUserId)
                 .distinct()
                 .forEach(userId ->
-                        messagingTemplate.convertAndSend(
-                                "/topic/portfolio/" + userId,
-                                "market-update"
-                        )
+                        messagingTemplate.convertAndSend( "/topic/portfolio/" + userId, "market-update")
                 );
 
         System.out.println("Market updated + WebSocket notified");

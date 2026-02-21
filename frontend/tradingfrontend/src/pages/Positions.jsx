@@ -31,7 +31,7 @@ function Positions() {
 
     fetchPositions();
 
-    const socket = new SockJS("https://tradex-backend-kd5w.onrender.com/ws");
+    const socket = new SockJS(`${import.meta.env.VITE_API_URL}/ws`);
     const client = new Client({
       webSocketFactory: () => socket,
       reconnectDelay: 5000,
@@ -50,7 +50,7 @@ function Positions() {
   // 2. Interactive Handlers
   const handleExit = (stockName, qty) => {
     if(window.confirm(`Do you want to exit ${stockName}?`)) {  
-        console.log("Navigating to sell", stockName);
+        
         navigate("/orders"); 
     }
   };

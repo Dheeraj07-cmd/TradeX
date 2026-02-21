@@ -32,13 +32,13 @@ function Dashboard() {
 
         fetchData();
 
-        const socket = new SockJS("https://tradex-backend-kd5w.onrender.com/ws");
+        const socket = new SockJS(`${import.meta.env.VITE_API_URL}/ws`);
         const client = new Client({
             webSocketFactory: () => socket, 
             reconnectDelay: 5000,
             onConnect: () => {
                 client.subscribe(`/topic/portfolio/${userId}`, (message) => {
-                    fetchData(); // Refresh data on update
+                    fetchData(); 
                 });
             }
         });
