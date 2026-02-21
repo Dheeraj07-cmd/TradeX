@@ -1,13 +1,13 @@
-/* src/index.css */
+
 body {
   margin: 0;
   padding: 0;
-  background-color: #121212; /* Matches your Dark Theme background */
+  background-color: #121212; 
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbar Styling (Optional: Makes scrollbar dark too) */
+
 ::-webkit-scrollbar {
   width: 8px;
 }

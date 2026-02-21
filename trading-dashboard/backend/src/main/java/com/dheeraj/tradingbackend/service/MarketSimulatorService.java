@@ -72,12 +72,12 @@ public class MarketSimulatorService {
 
             double pnl = (p.getPrice() - p.getAvg()) * p.getQty();
             p.setNet(String.format("%.2f", pnl));
-            p.setDay(p.getNet()); // Assuming day P&L matches total P&L in this context
+            p.setDay(p.getNet()); 
             p.setLoss(pnl < 0);
         }
         positionRepository.saveAll(positions);
 
-        //  Notify users once per tick
+        
         positions.stream()
                 .map(Position::getUserId)
                 .distinct()

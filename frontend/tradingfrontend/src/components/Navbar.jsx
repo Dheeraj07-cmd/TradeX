@@ -42,8 +42,8 @@ const nav = {
   justifyContent: "space-between",
   alignItems: "center",
   padding: "15px 40px",
-  background: "#1e1e1e", // DARK BACKGROUND
-  borderBottom: "1px solid #333", // DARK BORDER
+  background: "#1e1e1e", 
+  borderBottom: "1px solid #333", 
   position: "sticky",
   top: 0,
   zIndex: 100,

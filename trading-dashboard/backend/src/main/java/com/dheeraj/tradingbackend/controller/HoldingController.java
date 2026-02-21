@@ -18,14 +18,14 @@ public class HoldingController {
         this.holdingService = holdingService;
     }
 
-    // ✅ JWT-based holdings fetch
+    //  JWT-based holdings fetch
     @GetMapping
     public List<Holding> getHoldings(HttpServletRequest request) {
         String userId = (String) request.getAttribute("userId");
         return holdingService.getHoldingsByUserId(userId);
     }
 
-    // ✅ JWT-based unrealized P&L
+    //  JWT-based unrealized P&L
     @GetMapping("/pnl")
     public double getUnrealizedPnl(HttpServletRequest request) {
         String userId = (String) request.getAttribute("userId");

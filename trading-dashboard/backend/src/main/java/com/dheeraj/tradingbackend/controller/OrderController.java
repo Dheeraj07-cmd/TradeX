@@ -45,6 +45,4 @@ public class OrderController {
         String userId = (String) request.getAttribute("userId");
         return orderService.calculateUnrealizedPnl(userId);
     }
-
-
 }

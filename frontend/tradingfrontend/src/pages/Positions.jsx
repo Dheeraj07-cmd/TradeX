@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom"; // Import useNavigate
+import { useNavigate } from "react-router-dom"; 
 import API from "../services/api";
 import Navbar from "../components/Navbar";
 import * as ui from "../styles/style";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
-import { formatCurrency } from "../utils/helpers"; // Ensure you have this, or use standard formatting
+import { formatCurrency } from "../utils/helpers";
 
 function Positions() {
   const [positions, setPositions] = useState([]);
-  const navigate = useNavigate(); // Hook for navigation
+  const navigate = useNavigate(); 
 
   // 1. Calculate Portfolio Totals
   const totalInvested = positions.reduce((acc, p) => acc + (p.avg * p.qty), 0);
@@ -31,7 +31,7 @@ function Positions() {
 
     fetchPositions();
 
-    const socket = new SockJS("http://localhost:8080/ws");
+    const socket = new SockJS("https://tradex-backend-kd5w.onrender.com/ws");
     const client = new Client({
       webSocketFactory: () => socket,
       reconnectDelay: 5000,
@@ -49,11 +49,7 @@ function Positions() {
 
   // 2. Interactive Handlers
   const handleExit = (stockName, qty) => {
-    // Navigate to Orders page with pre-filled data (requires Orders page to handle location state)
-    // Or just alert for now
-    if(window.confirm(`Do you want to exit ${stockName}?`)) {
-        // Logic to trigger sell order API could go here, 
-        // but usually we redirect to Order Form:
+    if(window.confirm(`Do you want to exit ${stockName}?`)) {  
         console.log("Navigating to sell", stockName);
         navigate("/orders"); 
     }
@@ -68,7 +64,7 @@ function Positions() {
 
           <div style={{ ...ui.row, alignItems: "flex-start" }}>
             
-            {/* 🔹 LEFT: INTERACTIVE SUMMARY CARD */}
+            {/*  LEFT: SUMMARY CARD */}
             <div style={{ ...ui.card, flex: "1 1 300px", maxWidth: "350px", position: "sticky", top: "100px" }}>
                 <h3 style={{ margin: "0 0 20px 0", fontSize: "14px", color: "#888", textTransform: "uppercase", letterSpacing: "1px" }}>
                     Overall Return
@@ -108,7 +104,7 @@ function Positions() {
                 </div>
             </div>
 
-            {/* 🔹 RIGHT: INTERACTIVE POSITIONS TABLE */}
+            {/*  RIGHT: POSITIONS TABLE */}
             <div style={{ ...ui.card, flex: "2 1 400px", padding: 0, overflow: "hidden" }}>
               {positions.length === 0 ? (
                 <div style={{ padding: "50px", textAlign: "center", color: "#888" }}>
@@ -147,7 +143,7 @@ function Positions() {
                             <td style={ui.td}>{formatCurrency(p.avg)}</td>
                             <td style={{...ui.td, fontWeight: "500"}}>{formatCurrency(p.price)}</td>
                             
-                            {/* Dynamic P&L Coloring */}
+                            
                             <td style={ui.td}>
                                 <span style={{ color: pnl >= 0 ? "#28a745" : "#dc3545", fontWeight: "600" }}>
                                     {pnl >= 0 ? "+" : ""}{formatCurrency(pnl)}
@@ -157,7 +153,7 @@ function Positions() {
                                 </span>
                             </td>
 
-                            {/* Action Buttons */}
+                            
                             <td style={ui.td}>
                                 <div style={{ display: "flex", gap: "10px" }}>
                                     <button 

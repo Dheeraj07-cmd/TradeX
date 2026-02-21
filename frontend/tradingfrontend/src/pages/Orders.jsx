@@ -68,7 +68,7 @@ function Orders() {
 
             <div style={{ ...ui.row, alignItems: "flex-start" }}>
                 
-                {/* 🔹 LEFT: PLACE ORDER FORM */}
+                {/*  LEFT: PLACE ORDER FORM */}
                 <div style={{ ...ui.card, flex: "1 1 300px", maxWidth: "400px" }}>
                     <h3 style={{ margin: "0 0 20px 0", fontSize: "18px", color: "#444" }}>Place Order</h3>
 
@@ -145,7 +145,7 @@ function Orders() {
                     </div>
                 </div>
 
-                {/* 🔹 RIGHT: ORDER HISTORY TABLE */}
+                {/*  RIGHT: ORDER HISTORY TABLE */}
                 <div style={{ ...ui.card, flex: "2 1 400px", padding: 0, overflow: "hidden" }}>
                     <div style={{ padding: "15px 20px", borderBottom: "1px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <h3 style={{ margin: 0, fontSize: "16px" }}>Order Book</h3>
@@ -174,11 +174,7 @@ function Orders() {
                                 <tbody>
                                     {orders.map((o) => (
                                         <tr key={o.id}>
-                                            {/* <td style={ui.td}>
-                                                <span style={{fontSize: "12px", color: "#888"}}>
-                                                    {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                                </span>
-                                            </td> */}
+                                            
                                             <td style={ui.td}>
                                                 <span style={{
                                                     color: o.mode === "BUY" ? "#387ed1" : "#df514c",
