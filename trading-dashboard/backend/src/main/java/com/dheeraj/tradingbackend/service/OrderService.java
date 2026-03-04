@@ -94,15 +94,12 @@ public class OrderService {
                 h.setQty(remainingQty);
                 holdingRepository.save(h);
             }
-
-
     }
 
 
         /*  POSITIONS LOGIC */
 
-        Optional<Position> posOpt =
-                positionRepository.findByUserIdAndName(userId, stock);
+        Optional<Position> posOpt = positionRepository.findByUserIdAndName(userId, stock);
 
         if ("BUY".equalsIgnoreCase(mode)) {
 
@@ -200,9 +197,7 @@ public class OrderService {
                 double prevAvg = avgMap.getOrDefault(stock, 0.0);
 
                 int newQty = prevQty + o.getQty();
-                double newAvg =
-                        ((prevAvg * prevQty) +
-                                (o.getPrice() * o.getQty())) / newQty;
+                double newAvg = ((prevAvg * prevQty) + (o.getPrice() * o.getQty())) / newQty;
 
                 qtyMap.put(stock, newQty);
                 avgMap.put(stock, newAvg);
@@ -223,8 +218,7 @@ public class OrderService {
     /* UNREALIZED P&L (ORDERS) */
     public double calculateUnrealizedPnl(String userId) {
 
-        List<Position> positions =
-                positionRepository.findByUserId(userId);
+        List<Position> positions = positionRepository.findByUserId(userId);
 
         double total = 0;
 

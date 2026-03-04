@@ -4,7 +4,8 @@ spring:
 
   data:
     mongodb:
-      uri: ${SPRING_DATA_MONGODB_URI}
+      uri: ${MONGO_URI}
+      auto-index-creation: true
 
 server:
   port: ${PORT:8080}
@@ -13,3 +14,8 @@ jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION}
 
+brevo:
+  api:
+    key: ${BREVO_API_KEY}
+  sender:
+    email: ${BREVO_SENDER_EMAIL}

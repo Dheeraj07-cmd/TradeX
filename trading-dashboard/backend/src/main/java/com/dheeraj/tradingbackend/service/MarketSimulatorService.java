@@ -85,6 +85,5 @@ public class MarketSimulatorService {
                         messagingTemplate.convertAndSend( "/topic/portfolio/" + userId, "market-update")
                 );
 
-        System.out.println("Market updated + WebSocket notified");
     }
 }
