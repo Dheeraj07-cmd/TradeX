@@ -20,7 +20,6 @@ public class OtpController {
 
     @PostMapping("/send")
     public ResponseEntity<?> sendOtp(@RequestBody Map<String, String> body) {
-
         String email = body.get("email");
 
         try {
@@ -36,7 +35,6 @@ public class OtpController {
 
     @PostMapping("/verify")
     public String verifyOtp(@RequestBody Map<String, String> body) {
-
         String email = body.get("email");
         String otp = body.get("otp");
 
@@ -45,7 +43,6 @@ public class OtpController {
         if (valid) {
             return "Email verified successfully";
         }
-
         return "Invalid or expired OTP";
     }
 }

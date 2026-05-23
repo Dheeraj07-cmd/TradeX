@@ -23,7 +23,6 @@ public class EmailService {
         
         RestTemplate restTemplate = new RestTemplate();
         String url = "https://api.brevo.com/v3/smtp/email";
-
         
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -52,7 +51,6 @@ public class EmailService {
         );
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-
         
         try {
             restTemplate.postForEntity(url, request, String.class);

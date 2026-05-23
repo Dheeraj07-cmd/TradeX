@@ -20,16 +20,13 @@ public class OrderController {
 
     @PostMapping
     public Order createOrder(@RequestBody Order order, HttpServletRequest request) {
-
         String userId = (String) request.getAttribute("userId");
-
         order.setUserId(userId);
         return orderService.createOrder(order);
     }
 
     @GetMapping
     public List<Order> getOrders(HttpServletRequest request) {
-
         String userId = (String) request.getAttribute("userId");
         return orderService.getOrdersByUserId(userId);
     }

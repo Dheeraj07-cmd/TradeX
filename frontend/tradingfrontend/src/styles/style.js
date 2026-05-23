@@ -1,5 +1,4 @@
-
-const theme = {
+export const theme = {
   primary: "#387ed1", 
   bg: "#121212",      
   cardBg: "#1e1e1e",  

@@ -20,7 +20,6 @@ public class PositionController {
 
     @GetMapping
     public List<Position> getPositions(HttpServletRequest request) {
-
         String userId = (String) request.getAttribute("userId");
 
         return positionRepository.findByUserId(userId);

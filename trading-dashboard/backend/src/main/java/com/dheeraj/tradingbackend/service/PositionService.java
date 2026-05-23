@@ -12,12 +12,10 @@ public class PositionService {
     private final PositionRepository positionRepository;
 
     public PositionService(PositionRepository positionRepository) {
-
         this.positionRepository = positionRepository;
     }
 
     public List<Position> getPositionsByUserId(String userId) {
-
         return positionRepository.findByUserId(userId);
     }
 }

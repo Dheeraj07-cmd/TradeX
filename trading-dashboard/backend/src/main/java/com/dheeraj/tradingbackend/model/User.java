@@ -13,19 +13,22 @@ public class User {
     private String email;
     private String password;
     private String role;
+    private double balance;
+    private double usedMargin;
 
 
     public User() {
     }
 
-    public User(String name, String email, String password, String role) {
+    public User(String name, String email, String password, String role,double balance, double usedMargin) {
         this.name = name;
         this.email = email;
         this.password = password;
         this.role = role;
+        this.balance = balance;
+        this.usedMargin = usedMargin;
     }
 
-    // getters & setters
     public String getId() {
         return id;
     }
@@ -36,7 +39,6 @@ public class User {
     public String getName() {
         return name;
     }
-
     public void setName(String name) {
         this.name = name;
     }
@@ -61,5 +63,11 @@ public class User {
     public void setRole(String role) {
         this.role = role;
     }
+
+    public double getBalance() {return balance;}
+    public void setBalance(double balance) {this.balance = balance;}
+
+    public double getUsedMargin() {return usedMargin;}
+    public void setUsedMargin(double usedMargin) {this.usedMargin = usedMargin;}
 }
 

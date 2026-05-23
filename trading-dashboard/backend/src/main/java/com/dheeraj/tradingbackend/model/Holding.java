@@ -19,7 +19,6 @@ public class Holding {
 
     public Holding() {}
 
-    // getters & setters
     public String getId() {
         return id;
     }

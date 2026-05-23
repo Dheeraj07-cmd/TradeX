@@ -22,7 +22,6 @@ public class OtpService {
     }
 
     public void generateAndSendOtp(String email) {
-
         otpRepository.deleteByEmail(email);
 
         String otp = String.format("%06d", secureRandom.nextInt(999999));
@@ -39,7 +38,6 @@ public class OtpService {
     }
 
     public boolean verifyOtp(String email, String userProvidedOtp) {
-
         Optional<OtpDetails> otpOpt = otpRepository.findByEmail(email);
 
         if (otpOpt.isPresent()) {

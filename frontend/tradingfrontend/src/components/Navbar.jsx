@@ -1,8 +1,12 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import * as ui from "../styles/style";
 
 function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  const username = localStorage.getItem("username") || "User";
+  const initial = username.charAt(0).toUpperCase();
 
   const logout = () => {
     localStorage.clear();
@@ -11,24 +15,58 @@ function Navbar() {
 
   const getLinkStyle = (path) => ({
     ...link,
-    color: location.pathname === path ? "#387ed1" : "#a0a0a0", 
-    fontWeight: location.pathname === path ? "bold" : "normal",
+    color: location.pathname === path ? ui.theme.primary : "#a0a0a0",
+    fontWeight: location.pathname === path ? "600" : "500",
+    borderBottom: location.pathname === path ? `2px solid ${ui.theme.primary}` : "2px solid transparent",
+    padding: "20px 0px",
   });
 
   return (
     <div style={nav}>
-      <h3 style={{ margin: 0, color: "#387ed1" }}>TradeX</h3>
 
+      {/* Logo */}
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => navigate("/dashboard")}>
+        <div style={{
+          width: "28px", height: "28px",
+          backgroundColor: ui.theme.primary, borderRadius: "4px",
+          display: "flex", justifyContent: "center", alignItems: "center",
+          color: "white", fontWeight: "900", fontSize: "16px"
+        }}>
+          T
+        </div>
+        <h3 style={{ margin: 0, fontSize: "18px", letterSpacing: "0.5px", color: ui.theme.textMain }}>
+          Trade<span style={{ color: ui.theme.primary }}>X</span>
+        </h3>
+      </div>
+
+      {/* Navigation Links */}
       <div style={{ display: "flex", gap: "30px", alignItems: "center" }}>
         <Link to="/dashboard" style={getLinkStyle("/dashboard")}>Dashboard</Link>
         <Link to="/orders" style={getLinkStyle("/orders")}>Orders</Link>
         <Link to="/positions" style={getLinkStyle("/positions")}>Positions</Link>
-        
-        <button 
-          onClick={logout} 
+        <Link to="/funds" style={getLinkStyle("/funds")}>Funds</Link>
+      </div>
+
+      {/* Profile & Logout */}
+      <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{
+            width: "32px", height: "32px", borderRadius: "50%",
+            backgroundColor: "rgba(56, 126, 209, 0.1)",
+            color: ui.theme.primary, border: `1px solid ${ui.theme.primary}`,
+            display: "flex", justifyContent: "center", alignItems: "center",
+            fontWeight: "bold", fontSize: "14px"
+          }}>
+            {initial}
+          </div>
+          <span style={{ fontSize: "13px", fontWeight: "500", color: ui.theme.textMain }}>{username}</span>
+        </div>
+
+        <button
+          onClick={logout}
           style={logoutBtn}
-          onMouseOver={(e) => (e.target.style.background = "rgba(255, 77, 79, 0.1)")}
-          onMouseOut={(e) => (e.target.style.background = "transparent")}
+          onMouseOver={(e) => { e.target.style.color = ui.theme.danger; e.target.style.borderColor = ui.theme.danger; }}
+          onMouseOut={(e) => { e.target.style.color = ui.theme.textLight; e.target.style.borderColor = ui.theme.border; }}
         >
           Logout
         </button>
@@ -37,34 +75,35 @@ function Navbar() {
   );
 }
 
+
 const nav = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  padding: "15px 40px",
-  background: "#1e1e1e", 
-  borderBottom: "1px solid #333", 
+  padding: "0px 25px",
+  background: ui.theme.cardBg,
+  borderBottom: `1px solid ${ui.theme.border}`,
   position: "sticky",
   top: 0,
   zIndex: 100,
-  boxShadow: "0 2px 10px rgba(0,0,0,0.2)",
 };
 
 const link = {
   textDecoration: "none",
-  fontSize: "15px",
-  transition: "color 0.2s",
+  fontSize: "14px",
+  transition: "all 0.2s",
 };
 
 const logoutBtn = {
-  border: "1px solid #ff4d4f",
   background: "transparent",
-  color: "#ff4d4f",
-  padding: "8px 16px",
-  borderRadius: "6px",
+  border: `1px solid ${ui.theme.border}`,
+  color: ui.theme.textLight,
+  padding: "6px 14px",
+  borderRadius: "4px",
   cursor: "pointer",
-  fontSize: "14px",
-  transition: "all 0.2s",
+  fontSize: "12px",
+  fontWeight: "600",
+  transition: "all 0.2s"
 };
 
 export default Navbar;

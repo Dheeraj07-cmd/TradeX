@@ -12,12 +12,10 @@ public class HoldingService {
     private final HoldingRepository holdingRepository;
 
     public HoldingService(HoldingRepository holdingRepository) {
-
         this.holdingRepository = holdingRepository;
     }
 
     public List<Holding> getHoldingsByUserId(String userId) {
-
         return holdingRepository.findByUserId(userId);
     }
 

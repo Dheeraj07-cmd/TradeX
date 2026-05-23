@@ -41,25 +41,19 @@ public class JwtFilter extends OncePerRequestFilter {
             return;
         }
 
-
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-
             String token = authHeader.substring(7);
 
             try {
-
                 Claims claims = jwtUtil.extractClaims(token);
 
                 String userId = claims.getSubject();
                 String role = claims.get("role", String.class);
 
                 UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userId,
-                                null,
-                                role != null
+                        new UsernamePasswordAuthenticationToken(userId, null, role != null
                                         ? List.of(new SimpleGrantedAuthority(role))
                                         : Collections.emptyList()
                         );
@@ -67,8 +61,9 @@ public class JwtFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(authentication);
 
                 request.setAttribute("userId", userId);
-
+//                System.out.println("HEADER: " + authHeader);
             } catch (Exception e) {
+                e.printStackTrace();
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             }

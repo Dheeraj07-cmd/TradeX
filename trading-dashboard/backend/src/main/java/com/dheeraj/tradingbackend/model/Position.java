@@ -21,7 +21,6 @@ public class Position {
 
     public Position() {}
 
-    // getters & setters
     public String getId() {
         return id;
     }

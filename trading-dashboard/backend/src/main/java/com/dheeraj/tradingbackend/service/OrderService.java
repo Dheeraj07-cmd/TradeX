@@ -1,11 +1,7 @@
 package com.dheeraj.tradingbackend.service;
 
-import com.dheeraj.tradingbackend.model.Holding;
-import com.dheeraj.tradingbackend.model.Order;
-import com.dheeraj.tradingbackend.model.Position;
-import com.dheeraj.tradingbackend.repository.HoldingRepository;
-import com.dheeraj.tradingbackend.repository.OrderRepository;
-import com.dheeraj.tradingbackend.repository.PositionRepository;
+import com.dheeraj.tradingbackend.model.*;
+import com.dheeraj.tradingbackend.repository.*;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -13,6 +9,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 @Service
 public class OrderService {
@@ -21,20 +19,24 @@ public class OrderService {
     private final HoldingRepository holdingRepository;
     private final PositionRepository positionRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final UserRepository userRepository;
+    private final WatchlistRepository watchlistRepository;
 
     public OrderService(OrderRepository orderRepository,
                         HoldingRepository holdingRepository,
                         PositionRepository positionRepository,
-                        SimpMessagingTemplate messagingTemplate) {
+                        SimpMessagingTemplate messagingTemplate,
+                        UserRepository userRepository,
+                        WatchlistRepository watchlistRepository) {
         this.orderRepository = orderRepository;
         this.holdingRepository = holdingRepository;
         this.positionRepository = positionRepository;
         this.messagingTemplate = messagingTemplate;
+        this.userRepository = userRepository;
+        this.watchlistRepository = watchlistRepository;
     }
 
     public Order createOrder(Order order) {
-
-        Order savedOrder = orderRepository.save(order);
 
         String userId = order.getUserId();
         String stock = order.getName();
@@ -42,12 +44,32 @@ public class OrderService {
         double price = order.getPrice();
         String mode = order.getMode();
 
-        /* HOLDINGS LOGIC */
+        if (price == 0) {
+            Watchlist liveStock = watchlistRepository.findByUserIdAndSymbol(userId, stock)
+                    .orElseThrow(() -> new RuntimeException("Cannot find live price for Market Order."));
 
+            price = liveStock.getPrice();
+            order.setPrice(price);
+        }
+
+
+        /* HOLDINGS LOGIC */
         Optional<Holding> holdingOpt =
                 holdingRepository.findByUserIdAndName(userId, stock);
 
         if ("BUY".equalsIgnoreCase(mode)) {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+
+            double totalCost = qty * price;
+
+            if (user.getBalance() < totalCost) {
+                throw new RuntimeException("Insufficient balance");
+            }
+
+            user.setBalance(user.getBalance() - totalCost);
+
+            userRepository.save(user);
 
             if (holdingOpt.isPresent()) {
                 Holding h = holdingOpt.get();
@@ -75,7 +97,6 @@ public class OrderService {
         }
 
         if ("SELL".equalsIgnoreCase(mode)) {
-
             Holding h = holdingRepository
                     .findByUserIdAndName(userId, stock)
                     .orElseThrow(() ->
@@ -85,6 +106,13 @@ public class OrderService {
             if (h.getQty() < qty) {
                 throw new RuntimeException("Not enough quantity to sell");
             }
+
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+
+            double totalSellValue = qty * price;
+            user.setBalance(user.getBalance() + totalSellValue);
+            userRepository.save(user);
 
             int remainingQty = h.getQty() - qty;
 
@@ -107,8 +135,7 @@ public class OrderService {
                 Position p = posOpt.get();
 
                 int totalQty = p.getQty() + qty;
-                double newAvg =
-                        ((p.getAvg() * p.getQty()) + (price * qty)) / totalQty;
+                double newAvg = ((p.getAvg() * p.getQty()) + (price * qty)) / totalQty;
 
                 p.setQty(totalQty);
                 p.setAvg(newAvg);
@@ -168,10 +195,11 @@ public class OrderService {
             }
         }
 
-        messagingTemplate.convertAndSend(
-                "/topic/portfolio/" + userId,
-                "update"
-        );
+        messagingTemplate.convertAndSend( "/topic/portfolio/" + userId, "update");
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
+        order.setOrderDate(LocalDateTime.now().format(formatter));
+
+        Order savedOrder = orderRepository.save(order);
 
         return savedOrder;
     }
@@ -179,7 +207,6 @@ public class OrderService {
     /* REALIZED P&L (ORDERS) */
 
     public double calculateRealizedPnl(String userId) {
-
         List<Order> orders = orderRepository.findByUserId(userId);
 
         Map<String, Integer> qtyMap = new HashMap<>();
@@ -188,7 +215,6 @@ public class OrderService {
         double realizedPnl = 0;
 
         for (Order o : orders) {
-
             String stock = o.getName();
 
             if ("BUY".equalsIgnoreCase(o.getMode())) {
@@ -217,9 +243,7 @@ public class OrderService {
 
     /* UNREALIZED P&L (ORDERS) */
     public double calculateUnrealizedPnl(String userId) {
-
         List<Position> positions = positionRepository.findByUserId(userId);
-
         double total = 0;
 
         for (Position p : positions) {

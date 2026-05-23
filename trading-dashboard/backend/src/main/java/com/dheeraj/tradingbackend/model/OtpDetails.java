@@ -9,55 +9,52 @@ import java.time.LocalDateTime;
 @Document(collection = "otps")
 public class OtpDetails {
 
-        @Id
-        private String id;
+    @Id
+    private String id;
 
-        private String email;
+    private String email;
 
-        private String otp;
+    private String otp;
 
 
-        @Indexed(expireAfter = "300s")
-        private LocalDateTime createdAt;
+    @Indexed(expireAfter = "300s")
+    private LocalDateTime createdAt;
 
-        public OtpDetails() {}
+    public OtpDetails() {
+    }
 
-        public OtpDetails(String email, String otp, LocalDateTime createdAt) {
-            this.email = email;
-            this.otp = otp;
-            this.createdAt = createdAt;
-        }
+    public OtpDetails(String email, String otp, LocalDateTime createdAt) {
+        this.email = email;
+        this.otp = otp;
+        this.createdAt = createdAt;
+    }
 
-        public String getId() {
-            return id;
-        }
+    public String getId() {
+        return id;
+    }
+    public void setId(String id) {
+        this.id = id;
+    }
 
-        public String getEmail() {
-            return email;
-        }
+    public String getEmail() {
+        return email;
+    }
+    public void setEmail(String email) {
+        this.email = email;
+    }
 
-        public String getOtp() {
-            return otp;
-        }
+    public String getOtp() {
+        return otp;
+    }
+    public void setOtp(String otp) {
+        this.otp = otp;
+    }
 
-        public LocalDateTime getCreatedAt() {
-            return createdAt;
-        }
-
-        public void setId(String id) {
-            this.id = id;
-        }
-
-        public void setEmail(String email) {
-            this.email = email;
-        }
-
-        public void setOtp(String otp) {
-            this.otp = otp;
-        }
-
-        public void setCreatedAt(LocalDateTime createdAt) {
-            this.createdAt = createdAt;
-        }
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
 }
 

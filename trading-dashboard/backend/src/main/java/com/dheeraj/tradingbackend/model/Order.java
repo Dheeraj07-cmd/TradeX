@@ -9,23 +9,24 @@ public class Order {
     @Id
     private String id;
 
-    private String userId;   // multi-user link
+    private String userId;
     private String name;
     private int qty;
     private double price;
     private String mode;
+    private String orderDate;
 
     public Order() {}
 
-    public Order(String userId, String name, int qty, double price, String mode) {
+    public Order(String userId, String name, int qty, double price, String mode, String orderDate) {
         this.userId = userId;
         this.name = name;
         this.qty = qty;
         this.price = price;
         this.mode = mode;
-    }
+        this.orderDate =  orderDate;
+}
 
-    // getters & setters
     public String getId() {
         return id;
     }
@@ -67,6 +68,14 @@ public class Order {
     public void setMode(String mode) {
         this.mode = mode;
     }
+
+    public String getOrderDate() {
+        return orderDate;
+    }
+    public void setOrderDate(String orderDate) {
+        this.orderDate = orderDate;
+    }
 }
+
 
 
