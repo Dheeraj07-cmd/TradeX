@@ -3,6 +3,7 @@ import { Toaster } from "react-hot-toast";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Positions from "./pages/Positions";
+import Funds from "./pages/Funds";
 import Orders from "./pages/Orders";
 import Signup from "./pages/Signup";
 import Layout from "./components/Layout";
@@ -30,6 +31,7 @@ function App() {
         <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
         <Route path="/positions" element={<Layout><Positions /></Layout>} />
         <Route path="/orders" element={<Layout><Orders /></Layout>} />
+        <Route path="/funds" element={<Layout><Funds /></Layout>} />
       </Routes>
     </>
   );
