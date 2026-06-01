@@ -1,23 +1,23 @@
 package com.dheeraj.tradingbackend.model;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Data
-@AllArgsConstructor
 @NoArgsConstructor
-@Document(collection = "fund_transactions")
-public class FundTransaction {
+@Document(collection = "watchlist")
+public class Watchlist {
+
     @Id
     private String id;
-    private String txnId;
     private String userId;
-    private String type;
-    private double amount;
-    private String status;
-    private String date;
+    private String symbol;
+    private String companyName;
+    private double basePrice;
+    private double price;
+    private double changePercent;
+    private String listName = "Watchlist 1";
 
 }

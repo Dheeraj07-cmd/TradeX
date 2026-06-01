@@ -6,6 +6,11 @@ spring:
     mongodb:
       uri: ${MONGO_URI}
       auto-index-creation: true
+#   redis
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password:
 
 server:
   port: ${PORT:8080}
@@ -19,3 +24,4 @@ brevo:
     key: ${BREVO_API_KEY}
   sender:
     email: ${BREVO_SENDER_EMAIL}
+

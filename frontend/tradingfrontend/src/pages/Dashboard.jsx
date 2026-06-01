@@ -12,19 +12,20 @@ function Dashboard() {
     const [unrealizedPnl, setUnrealizedPnl] = useState(0);
     const [profile, setProfile] = useState(null);
 
+    // dynamically calculates live P&L using Redis prices
     const investedValue = holdings.reduce((sum, h) => sum + h.avg * h.qty, 0);
     const currentValue = holdings.reduce((sum, h) => sum + h.price * h.qty, 0);
     const totalPnl = currentValue - investedValue;
     const totalPnlPercent = investedValue > 0 ? ((totalPnl / investedValue) * 100).toFixed(2) : 0;
 
     useEffect(() => {
-        const userId = localStorage.getItem("userId");
-        const fetchData = async () => {
+        const fetchInitialData = async () => {
             try {
                 const holdingsRes = await API.get("/api/holdings");
                 const realizedRes = await API.get("/api/orders/pnl");
                 const unrealizedRes = await API.get("/api/orders/unrealized");
                 const profileRes = await API.get("/api/user/profile");
+
                 setHoldings(holdingsRes.data);
                 setRealizedPnl(realizedRes.data);
                 setUnrealizedPnl(unrealizedRes.data);
@@ -32,15 +33,23 @@ function Dashboard() {
             } catch (err) { console.error(err); }
         };
 
-        fetchData();
+        const fetchLiveHoldings = async () => {
+            try {
+                const holdingsRes = await API.get("/api/holdings");
+                setHoldings([...holdingsRes.data]);
+            } catch (err) { console.error(err); }
+        };
+
+        fetchInitialData();
 
         const client = new Client({
             webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_URL}/ws`),
             reconnectDelay: 5000,
             onConnect: () => {
                 console.log("WebSocket Connected!");
-                client.subscribe(`/topic/portfolio/${userId}`, () => {
-                    fetchData();
+                client.subscribe(`/topic/portfolio/update`, () => {
+                    console.log("Dashboard Tick");
+                    fetchLiveHoldings();
                 });
             },
             onStompError: (frame) => {
@@ -57,7 +66,6 @@ function Dashboard() {
     return (
         <div style={ui.page}>
             <div style={ui.container}>
-
                 <h2 style={{ marginBottom: "25px", fontSize: "22px", color: "#e0e0e0" }}>Hi, {username}</h2>
 
                 <div style={ui.row}>
@@ -84,12 +92,9 @@ function Dashboard() {
                     </div>
                 </div>
 
-
-                {/* Charts */}
                 <div style={{ ...ui.card, marginTop: "10px" }}>
                     <Charts holdings={holdings} realizedPnl={realizedPnl} unrealizedPnl={unrealizedPnl} />
                 </div>
-
 
                 <div style={{ ...ui.card, padding: 0, overflow: "hidden", marginTop: "20px" }}>
                     <div style={{ padding: "15px 20px", borderBottom: "1px solid #333", backgroundColor: "#1a1a1a" }}>
@@ -141,7 +146,6 @@ function Dashboard() {
                         </div>
                     )}
                 </div>
-
             </div>
         </div>
     );

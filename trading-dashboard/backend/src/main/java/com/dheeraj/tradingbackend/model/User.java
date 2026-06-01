@@ -1,8 +1,12 @@
 package com.dheeraj.tradingbackend.model;
 
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+@Data
+@NoArgsConstructor
 @Document(collection = "users")
 public class User {
 
@@ -16,10 +20,6 @@ public class User {
     private double balance;
     private double usedMargin;
 
-
-    public User() {
-    }
-
     public User(String name, String email, String password, String role,double balance, double usedMargin) {
         this.name = name;
         this.email = email;
@@ -29,45 +29,5 @@ public class User {
         this.usedMargin = usedMargin;
     }
 
-    public String getId() {
-        return id;
-    }
-    public void setId(String id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public String getRole() {
-        return role;
-    }
-    public void setRole(String role) {
-        this.role = role;
-    }
-
-    public double getBalance() {return balance;}
-    public void setBalance(double balance) {this.balance = balance;}
-
-    public double getUsedMargin() {return usedMargin;}
-    public void setUsedMargin(double usedMargin) {this.usedMargin = usedMargin;}
 }
 

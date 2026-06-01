@@ -2,6 +2,7 @@ package com.dheeraj.tradingbackend.service;
 
 import com.dheeraj.tradingbackend.model.*;
 import com.dheeraj.tradingbackend.repository.*;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -20,20 +21,20 @@ public class OrderService {
     private final PositionRepository positionRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final UserRepository userRepository;
-    private final WatchlistRepository watchlistRepository;
+    private final StringRedisTemplate redisTemplate;
 
     public OrderService(OrderRepository orderRepository,
                         HoldingRepository holdingRepository,
                         PositionRepository positionRepository,
                         SimpMessagingTemplate messagingTemplate,
                         UserRepository userRepository,
-                        WatchlistRepository watchlistRepository) {
+                        StringRedisTemplate redisTemplate) {
         this.orderRepository = orderRepository;
         this.holdingRepository = holdingRepository;
         this.positionRepository = positionRepository;
         this.messagingTemplate = messagingTemplate;
         this.userRepository = userRepository;
-        this.watchlistRepository = watchlistRepository;
+        this.redisTemplate = redisTemplate;
     }
 
     public Order createOrder(Order order) {
@@ -44,18 +45,19 @@ public class OrderService {
         double price = order.getPrice();
         String mode = order.getMode();
 
+        // Fetch Live Price directly from Redis cache
         if (price == 0) {
-            Watchlist liveStock = watchlistRepository.findByUserIdAndSymbol(userId, stock)
-                    .orElseThrow(() -> new RuntimeException("Cannot find live price for Market Order."));
-
-            price = liveStock.getPrice();
+            String livePriceStr = redisTemplate.opsForValue().get("live_price:" + stock);
+            if (livePriceStr == null) {
+                throw new RuntimeException("Cannot find live price for Market Order.");
+            }
+            price = Double.parseDouble(livePriceStr);
             order.setPrice(price);
         }
 
 
         /* HOLDINGS LOGIC */
-        Optional<Holding> holdingOpt =
-                holdingRepository.findByUserIdAndName(userId, stock);
+        Optional<Holding> holdingOpt = holdingRepository.findByUserIdAndName(userId, stock);
 
         if ("BUY".equalsIgnoreCase(mode)) {
             User user = userRepository.findById(userId)
@@ -68,15 +70,13 @@ public class OrderService {
             }
 
             user.setBalance(user.getBalance() - totalCost);
-
             userRepository.save(user);
 
             if (holdingOpt.isPresent()) {
                 Holding h = holdingOpt.get();
 
                 int totalQty = h.getQty() + qty;
-                double newAvg =
-                        ((h.getAvg() * h.getQty()) + (price * qty)) / totalQty;
+                double newAvg = ((h.getAvg() * h.getQty()) + (price * qty)) / totalQty;
 
                 h.setQty(totalQty);
                 h.setAvg(newAvg);
@@ -99,9 +99,7 @@ public class OrderService {
         if ("SELL".equalsIgnoreCase(mode)) {
             Holding h = holdingRepository
                     .findByUserIdAndName(userId, stock)
-                    .orElseThrow(() ->
-                            new RuntimeException("Holding not found for this stock")
-                    );
+                    .orElseThrow(() -> new RuntimeException("Holding not found for this stock"));
 
             if (h.getQty() < qty) {
                 throw new RuntimeException("Not enough quantity to sell");
@@ -122,11 +120,10 @@ public class OrderService {
                 h.setQty(remainingQty);
                 holdingRepository.save(h);
             }
-    }
+        }
 
 
-        /*  POSITIONS LOGIC */
-
+        /* POSITIONS LOGIC */
         Optional<Position> posOpt = positionRepository.findByUserIdAndName(userId, stock);
 
         if ("BUY".equalsIgnoreCase(mode)) {
@@ -168,9 +165,7 @@ public class OrderService {
 
             Position p = positionRepository
                     .findByUserIdAndName(userId, stock)
-                    .orElseThrow(() ->
-                            new RuntimeException("Position not found for this stock")
-                    );
+                    .orElseThrow(() -> new RuntimeException("Position not found for this stock"));
 
             if (p.getQty() < qty) {
                 throw new RuntimeException("Not enough position quantity");
@@ -181,7 +176,6 @@ public class OrderService {
             if (remainingQty == 0) {
                 positionRepository.delete(p);
             } else {
-
                 p.setQty(remainingQty);
                 p.setPrice(price);
 
@@ -195,17 +189,14 @@ public class OrderService {
             }
         }
 
-        messagingTemplate.convertAndSend( "/topic/portfolio/" + userId, "update");
+        messagingTemplate.convertAndSend( "/topic/portfolio/update", "tick");
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
         order.setOrderDate(LocalDateTime.now().format(formatter));
 
-        Order savedOrder = orderRepository.save(order);
-
-        return savedOrder;
+        return orderRepository.save(order);
     }
 
     /* REALIZED P&L (ORDERS) */
-
     public double calculateRealizedPnl(String userId) {
         List<Order> orders = orderRepository.findByUserId(userId);
 
@@ -218,7 +209,6 @@ public class OrderService {
             String stock = o.getName();
 
             if ("BUY".equalsIgnoreCase(o.getMode())) {
-
                 int prevQty = qtyMap.getOrDefault(stock, 0);
                 double prevAvg = avgMap.getOrDefault(stock, 0.0);
 
@@ -230,7 +220,6 @@ public class OrderService {
             }
 
             if ("SELL".equalsIgnoreCase(o.getMode())) {
-
                 double avg = avgMap.getOrDefault(stock, 0.0);
                 realizedPnl += (o.getPrice() - avg) * o.getQty();
 
@@ -250,13 +239,13 @@ public class OrderService {
             double pnl = (p.getPrice() - p.getAvg()) * p.getQty();
             total += pnl;
         }
-
         return total;
     }
-
 
     public List<Order> getOrdersByUserId(String userId) {
         return orderRepository.findByUserId(userId);
     }
 }
+
+
 
