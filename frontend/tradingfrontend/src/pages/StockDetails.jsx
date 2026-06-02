@@ -1,0 +1,201 @@
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import OrderModal from "../components/OrderModal";
+import * as ui from "../styles/style";
+import toast from "react-hot-toast";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
+import API from "../services/api";
+
+function StockDetails() {
+    const { symbol } = useParams();
+    const navigate = useNavigate();
+
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [orderMode, setOrderMode] = useState("BUY");
+
+    const [compareSymbol, setCompareSymbol] = useState("");
+
+    const availableStocks = ["TCS", "RELIANCE", "HDFCBANK", "INFY", "SBIN"].filter(s => s !== symbol);
+
+    const [price, setPrice] = useState(0);
+    const [comparePrice, setComparePrice] = useState(0);
+    const [stockInfo, setStockInfo] = useState(null);
+    const [depthData, setDepthData] = useState(null);
+
+    // Tab states for the dropdown
+    const [availableTabs, setAvailableTabs] = useState(["Watchlist 1"]);
+    const [selectedTab, setSelectedTab] = useState("Watchlist 1");
+
+    const openOrder = (mode) => {
+        setOrderMode(mode);
+        setIsModalOpen(true);
+    };
+
+    const handleAddToWatchlist = async () => {
+        try {
+            // Pass the selectedTab to the backend
+            const res = await API.post(`/api/watchlist/add/${symbol}?listName=${selectedTab}`);
+            toast.success(res.data.message);
+            window.dispatchEvent(new Event("watchlistUpdated"));
+        } catch (err) {
+            toast.error(err.response?.data || "Could not add to watchlist");
+        }
+    };
+
+    useEffect(() => {
+        const fetchInitialPrices = async () => {
+            try {
+                const res = await API.get(`/api/stocks/search?query=${symbol}`);
+                if (res.data && res.data.length > 0) {
+                    setPrice(res.data[0].currentPrice);
+                    setStockInfo(res.data[0]);
+                }
+
+                if (compareSymbol) {
+                    const compRes = await API.get(`/api/stocks/search?query=${compareSymbol}`);
+                    if (compRes.data && compRes.data.length > 0) {
+                        setComparePrice(compRes.data[0].currentPrice);
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch initial prices", err);
+            }
+        };
+
+        // Fetch the user's available tabs
+        const fetchUserTabs = async () => {
+            try {
+                const res = await API.get("/api/watchlist/tabs");
+                let dbTabs = res.data || [];
+
+                // Take any empty tabs from local storage
+                const localTabs = JSON.parse(localStorage.getItem("userTabs")) || [];
+                const mergedTabs = [...new Set([...dbTabs, ...localTabs])];
+
+                if (mergedTabs.length > 0) {
+                    setAvailableTabs(mergedTabs);
+                    setSelectedTab(mergedTabs[0]);
+                }
+            } catch (err) { console.error(err); }
+        };
+
+        fetchInitialPrices();
+        fetchUserTabs();
+
+        const client = new Client({
+            webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_URL}/ws`),
+            reconnectDelay: 5000,
+            onConnect: () => {
+                console.log("Connected to Live Market Stream!");
+
+                client.subscribe(`/topic/price/${symbol}`, (message) => {
+                    setPrice(parseFloat(message.body));
+                });
+
+                // Subscribe directly to the high-fidelity order book stream
+                client.subscribe(`/topic/depth/${symbol}`, (message) => {
+                    setDepthData(JSON.parse(message.body));
+                });
+
+                if (compareSymbol) {
+                    client.subscribe(`/topic/price/${compareSymbol}`, (message) => {
+                        setComparePrice(parseFloat(message.body));
+                    });
+                }
+            }
+        });
+
+        client.activate();
+        return () => client.deactivate();
+    }, [symbol, compareSymbol]);
+
+    return (
+        <div style={{ padding: "20px 40px", color: ui.theme.textMain }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px" }}>
+
+                {/* Back Button & Title */}
+                <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+                    <button
+                        onClick={() => navigate("/dashboard")}
+                        style={{ background: "transparent", border: `1px solid ${ui.theme.border}`, color: ui.theme.textLight, padding: "8px 15px", borderRadius: "4px", cursor: "pointer" }}
+                    >
+                        ← Back
+                    </button>
+                    <div>
+                        <h1 style={{ margin: 0, fontSize: "28px" }}>{symbol}</h1>
+                        <span style={{ color: "#888", fontSize: "14px" }}>National Stock Exchange</span>
+                    </div>
+                </div>
+
+                {/* Compare, Watchlist Combo, Buy, Sell */}
+                <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
+
+                    <select
+                        value={compareSymbol}
+                        onChange={(e) => setCompareSymbol(e.target.value)}
+                        style={{ ...ui.input, margin: 0, width: "auto", padding: "10px 15px", backgroundColor: "#1e1e1e" }}
+                    >
+                        <option value="">+ Compare</option>
+                        {availableStocks.map(stock => (
+                            <option key={stock} value={stock}>{stock}</option>
+                        ))}
+                    </select>
+
+                    {/* Watchlist dropdown and add */}
+                    <div style={{ display: "flex", border: `1px solid ${ui.theme.border}`, borderRadius: "4px", overflow: "hidden" }}>
+                        <select
+                            value={selectedTab}
+                            onChange={(e) => setSelectedTab(e.target.value)}
+                            style={{ ...ui.input, margin: 0, border: "none", borderRight: `1px solid ${ui.theme.border}`, borderRadius: 0, backgroundColor: "#1e1e1e", width: "120px", padding: "8px" }}
+                        >
+                            {availableTabs.map(tab => (
+                                <option key={tab} value={tab}>{tab}</option>
+                            ))}
+                        </select>
+                        <button
+                            onClick={handleAddToWatchlist}
+                            style={{ ...ui.button, margin: 0, border: "none", borderRadius: 0, backgroundColor: "transparent", color: ui.theme.primary, padding: "8px 15px" }}
+                        >
+                            ⭐ Add
+                        </button>
+                    </div>
+
+                    <button onClick={() => openOrder("BUY")} style={{ ...ui.button, margin: 0, width: "100px", backgroundColor: ui.theme.primary }}>
+                        BUY
+                    </button>
+                    <button onClick={() => openOrder("SELL")} style={{ ...ui.button, margin: 0, width: "100px", backgroundColor: ui.theme.danger }}>
+                        SELL
+                    </button>
+                </div>
+            </div>
+
+            {stockInfo && (
+                <div style={{ display: "flex", gap: "40px", marginBottom: "20px", padding: "15px 20px", backgroundColor: "#111", borderRadius: "8px", border: `1px solid ${ui.theme.border}` }}>
+                    <div>
+                        <span style={{ display: "block", color: "#888", fontSize: "12px", marginBottom: "4px" }}>Volume</span>
+                        <span style={{ fontWeight: "600", color: "#e0e0e0" }}>{(stockInfo.volume / 100000).toFixed(2)}M</span>
+                    </div>
+                    <div>
+                        <span style={{ display: "block", color: "#888", fontSize: "12px", marginBottom: "4px" }}>52W High</span>
+                        <span style={{ fontWeight: "600", color: ui.theme.success }}>₹{stockInfo.high52.toFixed(2)}</span>
+                    </div>
+                    <div>
+                        <span style={{ display: "block", color: "#888", fontSize: "12px", marginBottom: "4px" }}>52W Low</span>
+                        <span style={{ fontWeight: "600", color: ui.theme.danger }}>₹{stockInfo.low52.toFixed(2)}</span>
+                    </div>
+                </div>
+            )}
+
+            <OrderModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                instrument={symbol}
+                initialMode={orderMode}
+            />
+
+        </div>
+    );
+}
+
+export default StockDetails;
