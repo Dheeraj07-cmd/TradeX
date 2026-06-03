@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import TradingCharts from "../components/TradingCharts";
 import OrderModal from "../components/OrderModal";
 import * as ui from "../styles/style";
 import toast from "react-hot-toast";
@@ -184,6 +185,25 @@ function StockDetails() {
                         <span style={{ display: "block", color: "#888", fontSize: "12px", marginBottom: "4px" }}>52W Low</span>
                         <span style={{ fontWeight: "600", color: ui.theme.danger }}>₹{stockInfo.low52.toFixed(2)}</span>
                     </div>
+                </div>
+            )}
+
+            <div style={{ display: "flex", gap: "20px", marginBottom: compareSymbol ? "30px" : "0" }}>
+                <div style={{ flex: "7" }}>
+                    <TradingCharts symbol={symbol} currentPrice={price} />
+                </div>
+            </div>
+
+            {/* Secondary Chart */}
+            {compareSymbol && (
+                <div style={{ position: "relative" }}>
+                    <button
+                        onClick={() => setCompareSymbol("")}
+                        style={{ position: "absolute", top: "20px", right: "80px", zIndex: 10, background: "rgba(0,0,0,0.5)", color: "white", border: "none", padding: "5px 10px", borderRadius: "4px", cursor: "pointer" }}
+                    >
+                        ✕ Close Compare
+                    </button>
+                    <TradingCharts symbol={compareSymbol} currentPrice={comparePrice} />
                 </div>
             )}
 
