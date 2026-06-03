@@ -8,9 +8,8 @@ spring:
       auto-index-creation: true
 #   redis
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
-      password:
+      url: ${REDIS_URL}
+
 
 server:
   port: ${PORT:8080}
@@ -25,3 +24,12 @@ brevo:
   sender:
     email: ${BREVO_SENDER_EMAIL}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+  endpoint:
+    health:
+      show-details: never

@@ -7,10 +7,12 @@ COPY .mvn .mvn
 COPY mvnw .
 COPY src ./src
 
-RUN mvn clean package -DskipTests
+RUN chmod +x mvnw
+RUN ./mvnw clean package -DskipTests
 
 # Stage 2: Run 
-FROM eclipse-temurin:21-jdk
+FROM eclipse-temurin:21-jre
+RUN apt-get update && apt-get install -y curl
 WORKDIR /app
 
 COPY --from=build /app/target/*.jar app.jar
