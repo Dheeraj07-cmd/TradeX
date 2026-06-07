@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
 import * as ui from "../styles/style";
-import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import { formatCurrency } from "../utils/helpers";
 
@@ -27,7 +26,7 @@ function Positions({ openOrderModal }) {
     fetchPositions();
 
     const client = new Client({
-      webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_URL}/ws`),
+      brokerURL: `${import.meta.env.VITE_API_URL.replace("http", "ws")}/ws`,
       reconnectDelay: 5000,
       onConnect: () => {
         console.log("WebSocket Connected!");

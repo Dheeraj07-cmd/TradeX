@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import TradingCharts from "../components/TradingCharts";
 import OrderModal from "../components/OrderModal";
+import MarketDepth from "../components/MarketDepth";
+import LiveNews from "../components/LiveNews";
 import * as ui from "../styles/style";
 import toast from "react-hot-toast";
 import { Client } from "@stomp/stompjs";
-import SockJS from "sockjs-client";
 import API from "../services/api";
 
 function StockDetails() {
@@ -85,7 +86,7 @@ function StockDetails() {
         fetchUserTabs();
 
         const client = new Client({
-            webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_URL}/ws`),
+            brokerURL: `${import.meta.env.VITE_API_URL.replace("http", "ws")}/ws`,
             reconnectDelay: 5000,
             onConnect: () => {
                 console.log("Connected to Live Market Stream!");
@@ -188,11 +189,20 @@ function StockDetails() {
                 </div>
             )}
 
+            {/* Main Chart & Market Depth */}
             <div style={{ display: "flex", gap: "20px", marginBottom: compareSymbol ? "30px" : "0" }}>
                 <div style={{ flex: "7" }}>
                     <TradingCharts symbol={symbol} currentPrice={price} />
                 </div>
+                <div style={{ flex: "3" }}>
+                    <MarketDepth depthPack={depthData} currentPrice={price} />
+                </div>
             </div>
+
+            {/* Live News & Sentiment AI Feed */}
+            {!compareSymbol && (
+                <LiveNews symbol={symbol} />
+            )}
 
             {/* Secondary Chart */}
             {compareSymbol && (

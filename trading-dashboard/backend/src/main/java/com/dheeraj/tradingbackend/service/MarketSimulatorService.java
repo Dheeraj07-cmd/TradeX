@@ -44,7 +44,7 @@ public class MarketSimulatorService {
     @PostConstruct
     public void init() {
         try {
-            System.out.println("📦 Loading stocks into RAM Cache...");
+            System.out.println("Loading stocks into RAM Cache...");
             cachedStocks = stockRepository.findAll();
         }
         catch (Exception e) {
@@ -86,7 +86,7 @@ public class MarketSimulatorService {
     @Scheduled(fixedRate = 3000)
     public void simulateMarketMovement() {
         if (!isMarketOpen()) {
-            System.out.println("🔴 Market Closed");
+//            System.out.println("Market Closed");
             return;
         }
 
@@ -120,7 +120,7 @@ public class MarketSimulatorService {
         }
         messagingTemplate.convertAndSend("/topic/market-update", "tick");
         messagingTemplate.convertAndSend("/topic/portfolio/update", "tick");
-        System.out.println("🟢 Market Tick");
+//        System.out.println("Market Tick");
     }
 
     private void generateAndBroadcastMarketDepth(String symbol, double cmp) {
@@ -244,7 +244,7 @@ public class MarketSimulatorService {
         // Daily and Weekly candles generate (every 5 min, every hour), so skip isMarketOpen check for them
         if (!isMarketOpen() && !timeframe.equals("1M") && !timeframe.equals("1Y")) return;
 
-        System.out.println("🕒 Generating New " + timeframe + " Candles...");
+        System.out.println("Generating New " + timeframe + " Candles...");
 
         if (cachedStocks == null || cachedStocks.isEmpty()) return;
         long currentTime = System.currentTimeMillis() / 1000;
@@ -268,5 +268,52 @@ public class MarketSimulatorService {
         LocalTime now = LocalTime.now(istZone);
 
         return now.isAfter(LocalTime.of(9, 15)) && now.isBefore(LocalTime.of(15, 30));
+    }
+
+    public Map<String, Object> getHighestMovingStockContext() {
+        if (cachedStocks == null || cachedStocks.isEmpty()) {
+            return Map.of();
+        }
+
+        String targetSymbol = null;
+        double maxScore = -1;
+        double targetPrice = 0;
+        double targetChangePercent = 0;
+        double targetBias = 1.0;
+
+        for (Stock stock : cachedStocks) {
+            String symbol = stock.getSymbol();
+            double basePrice = stock.getCurrentPrice();
+
+            try {
+                String cachedPriceStr = redisTemplate.opsForValue().get("live_price:" + symbol);
+                if (cachedPriceStr == null) continue;
+
+                double currentPrice = Double.parseDouble(cachedPriceStr);
+                // Calculate session percentage change
+                double changePercent = basePrice != 0 ? ((currentPrice - basePrice) / basePrice) * 100.0 : 0.0;
+                double bias = stockBiasMap.getOrDefault(symbol, 1.0);
+
+                // looks for either price movement OR heavy order flow imbalance
+                double interestScore = Math.abs(changePercent) + (Math.abs(bias - 1.0) * 50.0);
+
+                if (interestScore > maxScore) {
+                    maxScore = interestScore;
+                    targetSymbol = symbol;
+                    targetPrice = currentPrice;
+                    targetChangePercent = changePercent;
+                    targetBias = bias;
+                }
+            } catch (Exception ignored) {}
+        }
+
+        if (targetSymbol == null) return Map.of();
+
+        Map<String, Object> context = new HashMap<>();
+        context.put("symbol", targetSymbol);
+        context.put("currentPrice", targetPrice);
+        context.put("priceChange", targetChangePercent);
+        context.put("marketBias", targetBias);
+        return context;
     }
 }

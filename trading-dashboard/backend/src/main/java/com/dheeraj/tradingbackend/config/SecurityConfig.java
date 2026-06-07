@@ -17,7 +17,6 @@ import java.util.List;
 @EnableMethodSecurity
 @Configuration
 public class SecurityConfig {
-
     private final JwtFilter jwtFilter;
 
     public SecurityConfig(JwtFilter jwtFilter) {
@@ -33,8 +32,7 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/ws/**", "/ws","/api/otp/**",
-                                "/actuator/health",
-                                "/actuator/health/**").permitAll()
+                                "/actuator/health","/actuator/health/**","/error").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

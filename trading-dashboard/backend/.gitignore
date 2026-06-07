@@ -3,6 +3,9 @@ target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+*.jar
+*.war
+*.class
 
 ### STS ###
 .apt_generated
@@ -19,6 +22,9 @@ target/
 *.iml
 *.ipr
 
+# OS generated files
+.DS_Store
+Thumbs.db
 
 ### NetBeans ###
 /nbproject/private/

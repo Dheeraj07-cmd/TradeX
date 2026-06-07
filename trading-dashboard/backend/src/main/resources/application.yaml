@@ -9,7 +9,14 @@ spring:
 #   redis
     redis:
       url: ${REDIS_URL}
-
+  ai:
+    google:
+      genai:
+        api-key: ${SPRING_AI_GEMINI_API_KEY}
+        chat:
+          options:
+            model: ${SPRING_AI_GEMINI_MODEL}
+            temperature: ${SPRING_AI_GEMINI_TEMPERATURE}
 
 server:
   port: ${PORT:8080}

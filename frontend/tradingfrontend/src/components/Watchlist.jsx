@@ -3,7 +3,6 @@ import API from "../services/api";
 import * as ui from "../styles/style";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 
 function Watchlist({ openOrderModal }) {
@@ -68,7 +67,7 @@ function Watchlist({ openOrderModal }) {
             if (!isMounted) return;
 
             const client = new Client({
-                webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_URL}/ws`),
+                brokerURL: `${import.meta.env.VITE_API_URL.replace("http", "ws")}/ws`,
                 reconnectDelay: 5000,
                 onConnect: () => {
                     initialList.forEach(stock => {

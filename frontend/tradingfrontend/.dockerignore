@@ -1,0 +1,17 @@
+# Prevent local node_modules from overriding Docker's Linux installation
+node_modules/
+
+# Prevent copying previous local builds
+dist/
+dist-ssr/
+
+# Git history
+.git/
+.gitignore
+
+# Secrets 
+.env
+.env.*
+
+# Don't copy Docker configs into the container
+Dockerfile

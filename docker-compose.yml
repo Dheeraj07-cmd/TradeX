@@ -1,20 +1,77 @@
 version: "3.9"
 
+networks:
+  tradex-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local
+
 services:
+
+  redis:
+    image: redis:7-alpine
+    container_name: tradex-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - tradex-network
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+
   backend:
-    build: ./trading-dashboard/backend
+    build: 
+      context: ./trading-dashboard/backend
+      dockerfile: Dockerfile
     container_name: tradex-backend
     ports:
       - "8080:8080"
     environment:
       - SPRING_DATA_MONGODB_URI=${MONGO_URI}
+      - REDIS_URL=${REDIS_URL}
       - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRATION=${JWT_EXPIRATION:-3600000}
+      - JWT_EXPIRATION=${JWT_EXPIRATION}
+      - BREVO_SENDER_EMAIL=${BREVO_SENDER_EMAIL}
+      - BREVO_API_KEY=${BREVO_API_KEY}
+      - RAZORPAY_API_KEY=${RAZORPAY_API_KEY}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
+      - SPRING_AI_GEMINI_API_KEY=${SPRING_AI_GEMINI_API_KEY}
+      - SPRING_AI_GEMINI_MODEL=${SPRING_AI_GEMINI_MODEL}
+      - SPRING_AI_GEMINI_TEMPERATURE=${SPRING_AI_GEMINI_TEMPERATURE}
+      - PORT=${PORT}
+    networks:
+      - tradex-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
   frontend:
-    build: ./frontend/tradingfrontend
+    build:
+      context: ./frontend/tradingfrontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL}
+        - VITE_RAZORPAY_API_KEY=${VITE_RAZORPAY_API_KEY}
+        - VITE_RAZORPAY_KEY_SECRET=${VITE_RAZORPAY_KEY_SECRET}
     container_name: tradex-frontend
     ports:
       - "3000:80"
+    networks:
+      - tradex-network
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy

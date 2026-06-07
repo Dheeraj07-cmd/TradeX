@@ -1,0 +1,19 @@
+# Prevent copying local build artifacts into Docker context
+target/
+
+# Prevent copying IDE configurations
+.idea/
+*.iml
+.vscode/
+
+# Git history
+.git/
+.gitignore
+
+# Secrets
+.env
+
+# Don't copy Docker configs into the container itself
+Dockerfile
+docker-compose.yml
+docker-compose.override.yml

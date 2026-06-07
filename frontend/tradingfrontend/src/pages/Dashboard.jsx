@@ -3,7 +3,6 @@ import API from "../services/api";
 import Charts from "../components/Charts";
 import * as ui from "../styles/style";
 import { formatCurrency } from "../utils/helpers";
-import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 
 function Dashboard() {
@@ -43,7 +42,7 @@ function Dashboard() {
         fetchInitialData();
 
         const client = new Client({
-            webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_URL}/ws`),
+            brokerURL: `${import.meta.env.VITE_API_URL.replace("http", "ws")}/ws`,
             reconnectDelay: 5000,
             onConnect: () => {
                 console.log("WebSocket Connected!");
