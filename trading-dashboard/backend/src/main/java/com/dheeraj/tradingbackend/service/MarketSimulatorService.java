@@ -316,4 +316,50 @@ public class MarketSimulatorService {
         context.put("marketBias", targetBias);
         return context;
     }
+
+    public List<Map<String, Object>> getTopMovingStocksContext(int limit) {
+        if (cachedStocks == null || cachedStocks.isEmpty()) {
+            return java.util.List.of();
+        }
+
+        java.util.List<java.util.Map<String, Object>> activeStocksList = new java.util.ArrayList<>();
+
+        for (Stock stock : cachedStocks) {
+            String symbol = stock.getSymbol();
+            double basePrice = stock.getCurrentPrice();
+
+            try {
+                // Read live price from Redis
+                String cachedPriceStr = redisTemplate.opsForValue().get("live_price:" + symbol);
+                if (cachedPriceStr == null) continue;
+
+                double currentPrice = Double.parseDouble(cachedPriceStr);
+
+                // Calculate current session net percentage change
+                double changePercent = basePrice != 0 ? ((currentPrice - basePrice) / basePrice) * 100.0 : 0.0;
+                double bias = stockBiasMap.getOrDefault(symbol, 1.0);
+
+                double interestScore = Math.abs(changePercent) + (Math.abs(bias - 1.0) * 50.0);
+
+                java.util.Map<String, Object> stockContext = new java.util.HashMap<>();
+                stockContext.put("symbol", symbol);
+                stockContext.put("currentPrice", currentPrice);
+                stockContext.put("priceChange", changePercent);
+                stockContext.put("marketBias", bias);
+                stockContext.put("interestScore", interestScore); // Embedded temporarily for sorting
+
+                activeStocksList.add(stockContext);
+            } catch (Exception ignored) {}
+        }
+
+        // Sort collection descending: highest activity score to lowest
+        activeStocksList.sort((m1, m2) -> Double.compare((double) m2.get("interestScore"), (double) m1.get("interestScore")));
+
+        // Return a sublist safely bounded by the limit parameter
+        if (activeStocksList.size() > limit) {
+            return activeStocksList.subList(0, limit);
+        }
+
+        return activeStocksList;
+    }
 }

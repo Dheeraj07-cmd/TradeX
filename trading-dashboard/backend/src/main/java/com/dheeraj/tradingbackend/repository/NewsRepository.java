@@ -10,5 +10,6 @@ import java.util.List;
 public interface NewsRepository extends MongoRepository<NewsArticle, String> {
 
     List<NewsArticle> findBySymbolOrderByTimestampDesc(String symbol);
-    List<NewsArticle> findTop10ByOrderByTimestampDesc();
+    List<NewsArticle> findTop20ByOrderByTimestampDesc();
+    List<NewsArticle> findTop5BySymbolOrderByTimestampDesc(String symbol);
 }

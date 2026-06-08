@@ -10,13 +10,13 @@ spring:
     redis:
       url: ${REDIS_URL}
   ai:
-    google:
-      genai:
-        api-key: ${SPRING_AI_GEMINI_API_KEY}
-        chat:
-          options:
-            model: ${SPRING_AI_GEMINI_MODEL}
-            temperature: ${SPRING_AI_GEMINI_TEMPERATURE}
+    openai:
+      api-key: ${SPRING_AI_OLLAMA_API_KEY}
+      base-url: ${SPRING_AI_OLLAMA_BASE_URL}
+      chat:
+        options:
+          model: ${SPRING_AI_OLLAMA_MODEL}
+          temperature: ${SPRING_AI_OLLAMA_TEMPERATURE}
 
 server:
   port: ${PORT:8080}

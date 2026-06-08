@@ -20,9 +20,11 @@ public class NewsGeneratorService {
     private final SimpMessagingTemplate messagingTemplate;
     private final MarketSimulatorService marketSimulatorService;
 
-    // Update the record to include a numeric score
-    record AiNewsResponse(String headline, String summary, String sentimentLabel, int sentimentScore) {
-    }
+    // items for the LLM mapping
+    public record GenAiNewsItem(String symbol, String headline, String summary, String sentimentLabel, int sentimentScore) { }
+
+    // Top-level wrapper that the LLM will fill as a JSON array
+    public record MarketNewsBatch(List<GenAiNewsItem> articles) { }
 
     public NewsGeneratorService(ChatClient.Builder chatClientBuilder,
                                 NewsRepository newsRepository,
@@ -34,77 +36,95 @@ public class NewsGeneratorService {
         this.marketSimulatorService = marketSimulatorService;
     }
 
-    // Wake up after every 15 minutes to analyze market and publish news
-    @Scheduled(fixedRate = 900000)
-//    @Scheduled(fixedRate = 30000)
-    public void generateMarketNews() {
+    //   @Scheduled(fixedRate = 30000)
+    @Scheduled(fixedRate = 1800000) // Triggers every 30 minutes
+    public void generateMarketNewsBatch() {
         try {
-            // Fetch live stock data from simulation state
-            Map<String, Object> marketState = marketSimulatorService.getHighestMovingStockContext();
+            // Retrieve list of actively moving stocks
+            List<Map<String, Object>> activeStocks = marketSimulatorService.getTopMovingStocksContext(50);
 
-            if (marketState == null || marketState.isEmpty()) {
-                System.out.println("Market stable. Skipping news cycle.");
+            if (activeStocks == null || activeStocks.isEmpty()) {
+                System.out.println("Market conditions stable. Skipping batch news cycle.");
                 return;
             }
 
-            String symbol = (String) marketState.get("symbol");
-            double priceChange = (double) marketState.get("priceChange");
-            double marketBias = (double) marketState.get("marketBias");
-            double currentPrice = (double) marketState.get("currentPrice");
+            // Build a matrix block for the prompt
+            StringBuilder marketContextBuilder = new StringBuilder();
+            for (Map<String, Object> stock : activeStocks) {
+                marketContextBuilder.append(String.format(
+                        "Ticker: %s | Price: %.2f | Change: %.2f%% | Bias: %.2f\n",
+                        stock.get("symbol"), stock.get("currentPrice"), stock.get("priceChange"), stock.get("marketBias")
+                ));
+            }
 
-            // Translate order book metrics into professional trading commentary
-            String orderFlowContext = marketBias > 1.05 ? "substantial institutional accumulation and aggressive buy-side order book depth"
-                    : marketBias < 0.95 ? "heavy sell-side distribution patterns and block-trade liquidations"
-                    : "steady retail matching engine liquidity with nominal spread volatility";
+            BeanOutputConverter<MarketNewsBatch> converter = new BeanOutputConverter<>(MarketNewsBatch.class);
 
-            BeanOutputConverter<AiNewsResponse> converter = new BeanOutputConverter<>(AiNewsResponse.class);
-
-            // Prepare a financial prompt
-            String promptText = String.format("""
+            String systemPrompt = String.format("""
                     Act as an elite senior financial journalist for Bloomberg News.
-                    Write a brief, sharp market update based on this live transactional data.
-                    
-                    Ticker Symbol: %s
-                    Last Traded Price: %.2f
-                    Session Net Percentage Change: %.2f%%
-                    Order Book Imbalance Profile: %s
+                    Analyze the provided live transactional market data block and generate brief, sharp updates for each asset listed.
                     
                     Instructions:
-                    - Do not mention that this is a simulation.
-                    - Use precise Wall Street terminology.
-                    - Capped the summary field at two brief sentences.
-                    - Provide a sentimentLabel (e.g., STRONGLY BULLISH, BULLISH, NEUTRAL, BEARISH).
-                    - Provide an integer sentimentScore between 0 and 100 based on the price change and market bias.
+                    - Generate exactly one news analysis entry for each ticker symbol provided in the data block.
+                    - Do not mention simulations, test environments, or database formats.
+                    - Keep each summary brief (maximum two concise sentences).
+                    - Map sentimentLabel strictly to: STRONGLY BULLISH, BULLISH, NEUTRAL, or BEARISH.
+                    - Calculate an integer sentimentScore from 0 to 100 based on price metrics.
                     
                     %s
-                    """, symbol, currentPrice, priceChange, orderFlowContext, converter.getFormat());
+                    """, converter.getFormat());
 
-            // Query the LLM
+            String userPayload = String.format("""
+                    Here is the current live transactional market data block to evaluate:
+                    
+                    %s
+                    """, marketContextBuilder.toString());
+
+            // Dispatch a single network request
             String aiResponse = chatClient.prompt()
-                    .user(promptText)
+                    .system(systemPrompt)
+                    .user(userPayload)
                     .call()
                     .content();
 
-            AiNewsResponse structuredData = converter.convert(aiResponse);
+            MarketNewsBatch batchData = converter.convert(aiResponse);
 
-            // Create and persist the database record
-            NewsArticle article = new NewsArticle();
-            article.setSymbol(symbol);
-            article.setHeadline(structuredData.headline());
-            article.setSummary(structuredData.summary());
-            article.setSentimentLabel(structuredData.sentimentLabel());
-            article.setSentimentScore(structuredData.sentimentScore());
-            article.setTimestamp(Instant.now().toEpochMilli());
+            if (batchData != null && batchData.articles() != null) {
+                int savedCount = 0;
+                long batchTimestamp = Instant.now().toEpochMilli();
+                // Unpack and process the batch sequentially
+                for (GenAiNewsItem item : batchData.articles()) {
+                    if (item.symbol() == null || item.headline() == null) continue;
 
-            newsRepository.save(article);
+                    NewsArticle article = new NewsArticle();
+                    article.setSymbol(item.symbol());
+                    article.setHeadline(item.headline());
+                    article.setSummary(item.summary());
+                    article.setSentimentLabel(item.sentimentLabel());
+                    article.setSentimentScore(item.sentimentScore());
+                    article.setTimestamp(batchTimestamp);
 
-            // Fire across the WebSocket Broker instantly
-            messagingTemplate.convertAndSend("/topic/news/" + symbol, article);
-            messagingTemplate.convertAndSend("/topic/globalNews", article);
+                    // Generate composite key (using Math.abs to avoid negative hash strings)
+                    String generatedKey = item.symbol().trim() + "_" + Math.abs(item.headline().trim().hashCode());
+                    article.setUniqueKey(generatedKey);
 
-            System.out.println("AI News Broadcasted for: " + symbol + " (" + priceChange + "%)");
+                    try {
+                        newsRepository.save(article);
+                        savedCount++;
+
+                        // Only send to React if the DB save was successful
+                        messagingTemplate.convertAndSend("/topic/news/" + item.symbol(), article);
+                        messagingTemplate.convertAndSend("/topic/globalNews", article);
+
+                    } catch (org.springframework.dao.DuplicateKeyException e) {
+                        System.out.println("Duplicate news skipped for: " + item.symbol());
+                    } catch (Exception e) {
+                        System.err.println("Database error saving news for " + item.symbol() + ": " + e.getMessage());
+                    }
+                }
+                System.out.println("✅ Successfully processed batch. Inserted " + savedCount + " new unique updates.");
+            }
         } catch (Exception e) {
-            System.err.println("⚠️ News engine skipped: " + e.getMessage());
+            System.err.println("⚠️ Batch news engine skipped: " + e.getMessage());
         }
     }
 }

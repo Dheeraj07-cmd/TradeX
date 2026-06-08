@@ -7,8 +7,67 @@ function LiveNews({ symbol }) {
     const [sentiment, setSentiment] = useState({ score: 50, label: "NEUTRAL", color: "#888" });
 
     useEffect(() => {
+        const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
+
+        // Fetch Historical News (REST API) on initial load
+        const fetchHistoricalNews = async () => {
+            try {
+                const token = localStorage.getItem("token");
+                const response = await fetch(`${apiUrl}/api/news/${symbol}`, {
+                    method: "GET",
+                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP Error: ${response.status}`);
+                }
+                const data = await response.json();
+
+                if (data && data.length > 0) {
+                    // Set top badge to the recent article's sentiment
+                    const latestArticle = data[0];
+                    let badgeColor = "#888";
+                    if (latestArticle.sentimentScore > 60) badgeColor = ui.theme.success;
+                    if (latestArticle.sentimentScore < 40) badgeColor = ui.theme.danger;
+
+                    setSentiment({
+                        score: latestArticle.sentimentScore || 50,
+                        label: latestArticle.sentimentLabel || "NEUTRAL",
+                        color: badgeColor
+                    });
+
+                    // Map historical DB format to UI format
+                    const historicalNews = data.map(article => ({
+                        id: article.timestamp,
+                        title: article.headline,
+                        summary: article.summary,
+                        source: "AI Market Analyst",
+                        time: new Date(article.timestamp).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit"
+                        }),
+                        impact: article.sentimentLabel
+                    }));
+
+                    setNews(historicalNews);
+                }
+            } catch (error) {
+                console.error("Failed to load historical news:", error);
+            }
+        };
+
+        // Trigger the fetch immediately
+        fetchHistoricalNews();
+
+        // Setup Live WebSocket Connection for background updates
+        const wsUrl = apiUrl.startsWith("https")
+            ? apiUrl.replace("https", "wss")
+            : apiUrl.replace("http", "ws");
+
+
         const client = new Client({
-            brokerURL: `${import.meta.env.VITE_API_URL.replace("http", "ws")}/ws`,
+            brokerURL: `${wsUrl}/ws`,
+            reconnectDelay: 5000,
             onConnect: () => {
                 client.subscribe(`/topic/news/${symbol}`, (message) => {
                     const article = JSON.parse(message.body);
@@ -28,12 +87,13 @@ function LiveNews({ symbol }) {
                     const structuralNewsItem = {
                         id: article.timestamp,
                         title: article.headline,
-                        source: "Gemini AI Insights",
+                        summary: article.summary,
+                        source: "AI Market Analyst",
                         time: "Just Now",
                         impact: article.sentimentLabel
                     };
 
-                    // Prepend new article to the top of feed
+                    // Prepend new article to the top of feed and keep only top 5
                     setNews((prevNews) => [structuralNewsItem, ...prevNews].slice(0, 5));
                 });
             },
@@ -68,13 +128,17 @@ function LiveNews({ symbol }) {
                         <a href="#" style={{ color: ui.theme.primary, fontSize: "15px", textDecoration: "none", fontWeight: "500", transition: "color 0.2s" }} onMouseOver={e => e.target.style.color = "#fff"} onMouseOut={e => e.target.style.color = ui.theme.primary}>
                             {item.title}
                         </a>
+                        <p style={{ margin: 0, color: "#aaa", fontSize: "13px" }}>{item.summary}</p>
+
                         <div style={{ display: "flex", gap: "15px", fontSize: "12px", color: "#666" }}>
                             <span>{item.source}</span>
                             <span>•</span>
                             <span>{item.time}</span>
                             <span>•</span>
                             <span style={{
-                                color: item.impact === "Positive" ? ui.theme.success : item.impact === "Negative" ? ui.theme.danger : "#888"
+                                color: (item.impact === "STRONGLY BULLISH" || item.impact === "BULLISH") ? ui.theme.success :
+                                    (item.impact === "BEARISH") ? ui.theme.danger :
+                                        "#888"
                             }}>
                                 Impact: {item.impact}
                             </span>
