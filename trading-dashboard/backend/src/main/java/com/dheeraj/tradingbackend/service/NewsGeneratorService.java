@@ -1,6 +1,9 @@
 package com.dheeraj.tradingbackend.service;
 
+import com.dheeraj.tradingbackend.dto.StockContext;
+import com.dheeraj.tradingbackend.model.MarketSummary;
 import com.dheeraj.tradingbackend.model.NewsArticle;
+import com.dheeraj.tradingbackend.repository.MarketSummaryRepository;
 import com.dheeraj.tradingbackend.repository.NewsRepository;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.converter.BeanOutputConverter;
@@ -10,121 +13,125 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class NewsGeneratorService {
 
     private final ChatClient chatClient;
     private final NewsRepository newsRepository;
+    private final MarketSummaryRepository summaryRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final MarketSimulatorService marketSimulatorService;
 
-    // items for the LLM mapping
     public record GenAiNewsItem(String symbol, String headline, String summary, String sentimentLabel, int sentimentScore) { }
 
-    // Top-level wrapper that the LLM will fill as a JSON array
-    public record MarketNewsBatch(List<GenAiNewsItem> articles) { }
+    // Holds entire snapshot requirements in one structured layout schema
+    public record CombinedMarketIntelligence(String macroSummary, List<GenAiNewsItem> articles) { }
 
     public NewsGeneratorService(ChatClient.Builder chatClientBuilder,
                                 NewsRepository newsRepository,
+                                MarketSummaryRepository summaryRepository,
                                 SimpMessagingTemplate messagingTemplate,
                                 MarketSimulatorService marketSimulatorService) {
         this.chatClient = chatClientBuilder.build();
         this.newsRepository = newsRepository;
+        this.summaryRepository = summaryRepository;
         this.messagingTemplate = messagingTemplate;
         this.marketSimulatorService = marketSimulatorService;
     }
 
-    //   @Scheduled(fixedRate = 30000)
-    @Scheduled(fixedRate = 1800000) // Triggers every 30 minutes
-    public void generateMarketNewsBatch() {
+    @Scheduled(fixedRate = 1800000) // Every 30 minutes
+    public void executeMarketIntelligenceCycle() {
         try {
-            // Retrieve list of actively moving stocks
-            List<Map<String, Object>> activeStocks = marketSimulatorService.getTopMovingStocksContext(50);
+            List<StockContext> activeStocks = marketSimulatorService.getTopMovingStocksContext(10);
 
             if (activeStocks == null || activeStocks.isEmpty()) {
-                System.out.println("Market conditions stable. Skipping batch news cycle.");
+                System.out.println("Market conditions stable. Skipping consolidation cycle.");
                 return;
             }
 
-            // Build a matrix block for the prompt
-            StringBuilder marketContextBuilder = new StringBuilder();
-            for (Map<String, Object> stock : activeStocks) {
-                marketContextBuilder.append(String.format(
-                        "Ticker: %s | Price: %.2f | Change: %.2f%% | Bias: %.2f\n",
-                        stock.get("symbol"), stock.get("currentPrice"), stock.get("priceChange"), stock.get("marketBias")
+            StringBuilder structuralContext = new StringBuilder();
+            for (StockContext stock : activeStocks) {
+                structuralContext.append(String.format(
+                        "%s | Price: %.2f | Change: %.2f%% | Sector: %s\n",
+                        stock.symbol(), stock.currentPrice(), stock.priceChange(), stock.sector()
                 ));
             }
 
-            BeanOutputConverter<MarketNewsBatch> converter = new BeanOutputConverter<>(MarketNewsBatch.class);
+            BeanOutputConverter<CombinedMarketIntelligence> converter = new BeanOutputConverter<>(CombinedMarketIntelligence.class);
 
             String systemPrompt = String.format("""
                     Act as an elite senior financial journalist for Bloomberg News.
-                    Analyze the provided live transactional market data block and generate brief, sharp updates for each asset listed.
+                    Analyze the live market data block provided and generate a unified market report.
                     
                     Instructions:
-                    - Generate exactly one news analysis entry for each ticker symbol provided in the data block.
-                    - Do not mention simulations, test environments, or database formats.
-                    - Keep each summary brief (maximum two concise sentences).
-                    - Map sentimentLabel strictly to: STRONGLY BULLISH, BULLISH, NEUTRAL, or BEARISH.
-                    - Calculate an integer sentimentScore from 0 to 100 based on price metrics.
+                    1. Provide a sharp, 2-sentence overarching macroSummary detailing ongoing asset velocity.
+                    2. Generate exactly one detailed news analysis item for each unique ticker symbol found in the block.
+                    3. Map sentimentLabel strictly to: STRONGLY BULLISH, BULLISH, NEUTRAL, or BEARISH.
+                    4. Calculate an integer sentimentScore from 0 to 100 based on vector direction.
                     
                     %s
                     """, converter.getFormat());
 
             String userPayload = String.format("""
-                    Here is the current live transactional market data block to evaluate:
+                    Current real-time structural market dataset:
                     
                     %s
-                    """, marketContextBuilder.toString());
+                    """, structuralContext.toString());
 
-            // Dispatch a single network request
             String aiResponse = chatClient.prompt()
                     .system(systemPrompt)
                     .user(userPayload)
                     .call()
                     .content();
 
-            MarketNewsBatch batchData = converter.convert(aiResponse);
+            CombinedMarketIntelligence intelligencePack = converter.convert(aiResponse);
 
-            if (batchData != null && batchData.articles() != null) {
-                int savedCount = 0;
-                long batchTimestamp = Instant.now().toEpochMilli();
-                // Unpack and process the batch sequentially
-                for (GenAiNewsItem item : batchData.articles()) {
-                    if (item.symbol() == null || item.headline() == null) continue;
+            if (intelligencePack != null) {
+                long currentTimestamp = Instant.now().toEpochMilli();
 
-                    NewsArticle article = new NewsArticle();
-                    article.setSymbol(item.symbol());
-                    article.setHeadline(item.headline());
-                    article.setSummary(item.summary());
-                    article.setSentimentLabel(item.sentimentLabel());
-                    article.setSentimentScore(item.sentimentScore());
-                    article.setTimestamp(batchTimestamp);
-
-                    // Generate composite key (using Math.abs to avoid negative hash strings)
-                    String generatedKey = item.symbol().trim() + "_" + Math.abs(item.headline().trim().hashCode());
-                    article.setUniqueKey(generatedKey);
-
-                    try {
-                        newsRepository.save(article);
-                        savedCount++;
-
-                        // Only send to React if the DB save was successful
-                        messagingTemplate.convertAndSend("/topic/news/" + item.symbol(), article);
-                        messagingTemplate.convertAndSend("/topic/globalNews", article);
-
-                    } catch (org.springframework.dao.DuplicateKeyException e) {
-                        System.out.println("Duplicate news skipped for: " + item.symbol());
-                    } catch (Exception e) {
-                        System.err.println("Database error saving news for " + item.symbol() + ": " + e.getMessage());
-                    }
+                // Process Single Macro Summary Unit
+                if (intelligencePack.macroSummary() != null && !intelligencePack.macroSummary().isBlank()) {
+                    summaryRepository.save(new MarketSummary(intelligencePack.macroSummary(), currentTimestamp));
+                    System.out.println("Dynamic Macro Summary successfully updated.");
                 }
-                System.out.println("✅ Successfully processed batch. Inserted " + savedCount + " new unique updates.");
+
+                // Process Streaming Articles Sequence
+                if (intelligencePack.articles() != null) {
+                    int savedCount = 0;
+                    for (GenAiNewsItem item : intelligencePack.articles()) {
+                        if (item.symbol() == null || item.headline() == null) continue;
+
+                        NewsArticle article = new NewsArticle();
+                        article.setSymbol(item.symbol());
+                        article.setHeadline(item.headline());
+                        article.setSummary(item.summary());
+                        article.setSentimentLabel(item.sentimentLabel());
+                        article.setSentimentScore(item.sentimentScore());
+                        article.setTimestamp(currentTimestamp);
+
+                        String sourcePayload = item.symbol().trim() + "_" + item.headline().trim();
+                        String generatedKey = item.symbol().trim() + "_" + UUID.nameUUIDFromBytes(sourcePayload.getBytes());
+                        article.setUniqueKey(generatedKey);
+
+                        try {
+                            newsRepository.save(article);
+                            savedCount++;
+
+                            messagingTemplate.convertAndSend("/topic/news/" + item.symbol(), article);
+                            messagingTemplate.convertAndSend("/topic/globalNews", article);
+                        } catch (org.springframework.dao.DuplicateKeyException e) {
+                            System.out.println("Duplicate signature caught. Record skipped: " + item.symbol());
+                        } catch (Exception e) {
+                            System.err.println("Failed appending track payload: " + e.getMessage());
+                        }
+                    }
+                    System.out.println("✅ Complete cycle committed. Inserted " + savedCount + " distinct updates.");
+                }
             }
         } catch (Exception e) {
-            System.err.println("⚠️ Batch news engine skipped: " + e.getMessage());
+            System.err.println("⚠️ Market aggregation thread skipped: " + e.getMessage());
         }
     }
 }

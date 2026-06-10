@@ -8,6 +8,7 @@ import StockDetails from "./pages/StockDetails";
 import Orders from "./pages/Orders";
 import Signup from "./pages/Signup";
 import Layout from "./components/Layout";
+import MarketFeed from "./pages/MarketFeed";
 
 import "./App.css";
 
@@ -34,6 +35,7 @@ function App() {
         <Route path="/orders" element={<Layout><Orders /></Layout>} />
         <Route path="/funds" element={<Layout><Funds /></Layout>} />
         <Route path="/stock/:symbol" element={<Layout><StockDetails /></Layout>} />
+        <Route path="/market-feed" element={<Layout><MarketFeed /></Layout>} />
       </Routes>
     </>
   );

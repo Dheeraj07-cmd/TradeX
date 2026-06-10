@@ -57,6 +57,7 @@ function Navbar() {
           <Link to="/orders" style={getLinkStyle("/orders")}>Orders</Link>
           <Link to="/positions" style={getLinkStyle("/positions")}>Positions</Link>
           <Link to="/funds" style={getLinkStyle("/funds")}>Funds</Link>
+          <Link to="/market-feed" style={getLinkStyle("/market-feed")}>Terminal</Link>
         </div>
 
         {/* Profile & Logout */}

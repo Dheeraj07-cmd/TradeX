@@ -1,6 +1,7 @@
 package com.dheeraj.tradingbackend.service;
 
 import com.dheeraj.tradingbackend.config.MarketConfig;
+import com.dheeraj.tradingbackend.dto.StockContext;
 import com.dheeraj.tradingbackend.model.Candle;
 import com.dheeraj.tradingbackend.model.Stock;
 import com.dheeraj.tradingbackend.repository.CandleRepository;
@@ -13,11 +14,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class MarketSimulatorService {
@@ -27,7 +26,6 @@ public class MarketSimulatorService {
     private final StringRedisTemplate redisTemplate;
     private final SimpMessagingTemplate messagingTemplate;
     private volatile List<Stock> cachedStocks = List.of();
-    private final Random random = new Random();
     private final Map<String, Double> volatilityMap = new ConcurrentHashMap<>();
     private final Map<String, Double> stockBiasMap = new ConcurrentHashMap<>();
 
@@ -91,42 +89,52 @@ public class MarketSimulatorService {
         }
 
         if (cachedStocks == null || cachedStocks.isEmpty()) return;
-        for (Stock stock : cachedStocks) {
+        ThreadLocalRandom localRandom = ThreadLocalRandom.current();
+
+        // Fetch ALL prices in 1 Redis Call
+        List<String> keys = cachedStocks.stream().map(s -> "live_price:" + s.getSymbol()).toList();
+        List<String> cachedPrices = redisTemplate.opsForValue().multiGet(keys);
+
+        Map<String, String> newPricesToCache = new HashMap<>();
+        for (int i = 0; i < cachedStocks.size(); i++) {
+            Stock stock = cachedStocks.get(i);
             String symbol = stock.getSymbol();
-            String redisKey = "live_price:" + symbol;
+            String cachedPriceStr = cachedPrices.get(i);
 
                 // Get latest live price from Redis
             try {
-                String cachedPriceStr = redisTemplate.opsForValue().get(redisKey);
                 double currentPrice = (cachedPriceStr != null) ? Double.parseDouble(cachedPriceStr) : stock.getCurrentPrice();
 
                 // Apply dynamic volatility based on stock
                 double volatility = volatilityMap.getOrDefault(symbol, 0.002);
                 double bias = stockBiasMap.getOrDefault(symbol, 1.0);
                 double directionalBias = (bias - 1.0) * 0.5;
-                double changePercent = ((random.nextDouble() - 0.5) + directionalBias) * volatility;
+                double changePercent = ((localRandom.nextDouble() - 0.5) + directionalBias) * volatility;
 
                 double newPrice = currentPrice + (currentPrice * changePercent);
                 newPrice = Math.round(newPrice * 100.0) / 100.0;
 
-                // Save to Redis
-                redisTemplate.opsForValue().set(redisKey, String.valueOf(newPrice));
-                messagingTemplate.convertAndSend("/topic/price/" + symbol, newPrice);
+                // Batch new prices to save later
+                newPricesToCache.put("live_price:" + symbol, String.valueOf(newPrice));
 
+                messagingTemplate.convertAndSend("/topic/price/" + symbol, newPrice);
                 generateAndBroadcastMarketDepth(symbol, newPrice);
             } catch (Exception e) {
-                System.out.println("Redis error for " + symbol + " : " + e.getMessage());
+                System.out.println("Movement error for " + symbol + " : " + e.getMessage());
             }
         }
+
+        // MultiSet updates all Redis keys in 1 call
+        redisTemplate.opsForValue().multiSet(newPricesToCache);
+
         messagingTemplate.convertAndSend("/topic/market-update", "tick");
         messagingTemplate.convertAndSend("/topic/portfolio/update", "tick");
-//        System.out.println("Market Tick");
     }
 
     private void generateAndBroadcastMarketDepth(String symbol, double cmp) {
-        java.util.List<java.util.Map<String, Object>> bids = new java.util.ArrayList<>();
-        java.util.List<java.util.Map<String, Object>> asks = new java.util.ArrayList<>();
-
+        List<Map<String, Object>> bids = new ArrayList<>();
+        List<Map<String, Object>> asks = new ArrayList<>();
+        ThreadLocalRandom localRandom = ThreadLocalRandom.current();
         long totalBidQty = 0;
         long totalAskQty = 0;
         double tickSize = Math.max(0.05, cmp * 0.00005);
@@ -134,7 +142,7 @@ public class MarketSimulatorService {
 
         double bias = stockBiasMap.getOrDefault(symbol, 1.0);
         // Base bias to simulate order imbalance (Buy/Sell pressure)
-        bias += (random.nextDouble() - 0.5) * 0.02;
+        bias += (localRandom.nextDouble() - 0.5) * 0.02;
         bias = Math.max(0.7, Math.min(1.3, bias));
         stockBiasMap.put(symbol, bias);
 
@@ -143,27 +151,26 @@ public class MarketSimulatorService {
             double bidPrice = Math.round((cmp - (i * tickSize)) * 100.0) / 100.0;
             double askPrice = Math.round((cmp + (i * tickSize)) * 100.0) / 100.0;
 
-            // Liquidity Clustering: Higher volume closest to CMP
-            long baseQty = (long) ((20000 / i) + random.nextInt(2000));
+            // Liquidity Clustering= Higher volume closest to CMP
+            long baseQty = (long) ((20000 / i) + localRandom.nextInt(2000));
             long bidQty = (long) (baseQty * bias);
             long askQty = (long) (baseQty * (2.0 - bias));
 
-            int bidOrders = random.nextInt(15) + (20 / i);
-            int askOrders = random.nextInt(15) + (20 / i);
+            int bidOrders = localRandom.nextInt(15) + (20 / i);
+            int askOrders = localRandom.nextInt(15) + (20 / i);
 
             totalBidQty += bidQty;
             totalAskQty += askQty;
 
-            bids.add(java.util.Map.of("price", bidPrice, "qty", bidQty, "orders", bidOrders));
-            asks.add(java.util.Map.of("price", askPrice, "qty", askQty, "orders", askOrders));
+            bids.add(Map.of("price", bidPrice, "qty", bidQty, "orders", bidOrders));
+            asks.add(Map.of("price", askPrice, "qty", askQty, "orders", askOrders));
         }
 
-        // Safe and precise operator precedence
         double bestAsk = (double) asks.get(0).get("price");
         double bestBid = (double) bids.get(0).get("price");
         double spread = Math.round((bestAsk - bestBid) * 100.0) / 100.0;
 
-        java.util.Map<String, Object> depthPack = java.util.Map.of(
+        Map<String, Object> depthPack = Map.of(
                 "symbol", symbol,
                 "bids", bids,
                 "asks", asks,
@@ -270,96 +277,39 @@ public class MarketSimulatorService {
         return now.isAfter(LocalTime.of(9, 15)) && now.isBefore(LocalTime.of(15, 30));
     }
 
-    public Map<String, Object> getHighestMovingStockContext() {
+
+    public List<StockContext> getTopMovingStocksContext(int limit) {
         if (cachedStocks == null || cachedStocks.isEmpty()) {
-            return Map.of();
+            return List.of();
         }
 
-        String targetSymbol = null;
-        double maxScore = -1;
-        double targetPrice = 0;
-        double targetChangePercent = 0;
-        double targetBias = 1.0;
+        List<StockContext> activeStocksList = new java.util.ArrayList<>();
 
-        for (Stock stock : cachedStocks) {
+        // Network Call
+        List<String> keys = cachedStocks.stream().map(s -> "live_price:" + s.getSymbol()).toList();
+        List<String> cachedPrices = redisTemplate.opsForValue().multiGet(keys);
+
+        for (int i = 0; i < cachedStocks.size(); i++) {
+            Stock stock = cachedStocks.get(i);
             String symbol = stock.getSymbol();
+            String sector = stock.getSector() != null ? stock.getSector() : "OTHER";
             double basePrice = stock.getCurrentPrice();
+            String cachedPriceStr = cachedPrices.get(i);
+
+            if (cachedPriceStr == null) continue;
 
             try {
-                String cachedPriceStr = redisTemplate.opsForValue().get("live_price:" + symbol);
-                if (cachedPriceStr == null) continue;
-
                 double currentPrice = Double.parseDouble(cachedPriceStr);
-                // Calculate session percentage change
                 double changePercent = basePrice != 0 ? ((currentPrice - basePrice) / basePrice) * 100.0 : 0.0;
                 double bias = stockBiasMap.getOrDefault(symbol, 1.0);
-
-                // looks for either price movement OR heavy order flow imbalance
                 double interestScore = Math.abs(changePercent) + (Math.abs(bias - 1.0) * 50.0);
 
-                if (interestScore > maxScore) {
-                    maxScore = interestScore;
-                    targetSymbol = symbol;
-                    targetPrice = currentPrice;
-                    targetChangePercent = changePercent;
-                    targetBias = bias;
-                }
+                // Create clean DTO
+                activeStocksList.add(new StockContext(symbol, sector, currentPrice, changePercent, bias, interestScore));
             } catch (Exception ignored) {}
         }
 
-        if (targetSymbol == null) return Map.of();
-
-        Map<String, Object> context = new HashMap<>();
-        context.put("symbol", targetSymbol);
-        context.put("currentPrice", targetPrice);
-        context.put("priceChange", targetChangePercent);
-        context.put("marketBias", targetBias);
-        return context;
-    }
-
-    public List<Map<String, Object>> getTopMovingStocksContext(int limit) {
-        if (cachedStocks == null || cachedStocks.isEmpty()) {
-            return java.util.List.of();
-        }
-
-        java.util.List<java.util.Map<String, Object>> activeStocksList = new java.util.ArrayList<>();
-
-        for (Stock stock : cachedStocks) {
-            String symbol = stock.getSymbol();
-            double basePrice = stock.getCurrentPrice();
-
-            try {
-                // Read live price from Redis
-                String cachedPriceStr = redisTemplate.opsForValue().get("live_price:" + symbol);
-                if (cachedPriceStr == null) continue;
-
-                double currentPrice = Double.parseDouble(cachedPriceStr);
-
-                // Calculate current session net percentage change
-                double changePercent = basePrice != 0 ? ((currentPrice - basePrice) / basePrice) * 100.0 : 0.0;
-                double bias = stockBiasMap.getOrDefault(symbol, 1.0);
-
-                double interestScore = Math.abs(changePercent) + (Math.abs(bias - 1.0) * 50.0);
-
-                java.util.Map<String, Object> stockContext = new java.util.HashMap<>();
-                stockContext.put("symbol", symbol);
-                stockContext.put("currentPrice", currentPrice);
-                stockContext.put("priceChange", changePercent);
-                stockContext.put("marketBias", bias);
-                stockContext.put("interestScore", interestScore); // Embedded temporarily for sorting
-
-                activeStocksList.add(stockContext);
-            } catch (Exception ignored) {}
-        }
-
-        // Sort collection descending: highest activity score to lowest
-        activeStocksList.sort((m1, m2) -> Double.compare((double) m2.get("interestScore"), (double) m1.get("interestScore")));
-
-        // Return a sublist safely bounded by the limit parameter
-        if (activeStocksList.size() > limit) {
-            return activeStocksList.subList(0, limit);
-        }
-
-        return activeStocksList;
+        activeStocksList.sort((m1, m2) -> Double.compare(m2.interestScore(), m1.interestScore()));
+        return activeStocksList.size() > limit ? activeStocksList.subList(0, limit) : activeStocksList;
     }
 }
