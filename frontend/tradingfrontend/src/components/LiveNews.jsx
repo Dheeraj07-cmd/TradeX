@@ -5,14 +5,16 @@ import * as ui from "../styles/style";
 function LiveNews({ symbol }) {
     const [news, setNews] = useState([]);
     const [sentiment, setSentiment] = useState({ score: 50, label: "NEUTRAL", color: "#888" });
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
-        // Fetch Historical News (REST API) on initial load
+        // Fetch Historical News on initial load
         const fetchHistoricalNews = async () => {
+            setLoading(true);
             try {
-                const token = localStorage.getItem("token");
+                const token = localStorage.getItem("token") || localStorage.getItem("jwt");
                 const response = await fetch(`${apiUrl}/api/news/${symbol}`, {
                     method: "GET",
                     headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
@@ -24,7 +26,6 @@ function LiveNews({ symbol }) {
                 const data = await response.json();
 
                 if (data && data.length > 0) {
-                    // Set top badge to the recent article's sentiment
                     const latestArticle = data[0];
                     let badgeColor = "#888";
                     if (latestArticle.sentimentScore > 60) badgeColor = ui.theme.success;
@@ -36,7 +37,7 @@ function LiveNews({ symbol }) {
                         color: badgeColor
                     });
 
-                    // Map historical DB format to UI format
+                    // Convert historical DB format to UI format
                     const historicalNews = data.map(article => ({
                         id: article.timestamp,
                         title: article.headline,
@@ -50,20 +51,23 @@ function LiveNews({ symbol }) {
                     }));
 
                     setNews(historicalNews);
+                } else {
+                    setNews([]);
                 }
             } catch (error) {
                 console.error("Failed to load historical news:", error);
+                setNews([]);
+            } finally {
+                setLoading(false);
             }
         };
 
-        // Trigger the fetch immediately
         fetchHistoricalNews();
 
-        // Setup Live WebSocket Connection for background updates
+        // Live WebSocket Connection for background updates
         const wsUrl = apiUrl.startsWith("https")
             ? apiUrl.replace("https", "wss")
             : apiUrl.replace("http", "ws");
-
 
         const client = new Client({
             brokerURL: `${wsUrl}/ws`,
@@ -72,7 +76,7 @@ function LiveNews({ symbol }) {
                 client.subscribe(`/topic/news/${symbol}`, (message) => {
                     const article = JSON.parse(message.body);
 
-                    // Map color based on score from backend
+                    // Color based on score from backend
                     let badgeColor = "#888";
                     if (article.sentimentScore > 60) badgeColor = ui.theme.success;
                     if (article.sentimentScore < 40) badgeColor = ui.theme.danger;
@@ -123,28 +127,40 @@ function LiveNews({ symbol }) {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                {news.map(item => (
-                    <div key={item.id} style={{ display: "flex", flexDirection: "column", gap: "5px", paddingBottom: "15px", borderBottom: "1px dashed #333" }}>
-                        <a href="#" style={{ color: ui.theme.primary, fontSize: "15px", textDecoration: "none", fontWeight: "500", transition: "color 0.2s" }} onMouseOver={e => e.target.style.color = "#fff"} onMouseOut={e => e.target.style.color = ui.theme.primary}>
-                            {item.title}
-                        </a>
-                        <p style={{ margin: 0, color: "#aaa", fontSize: "13px" }}>{item.summary}</p>
-
-                        <div style={{ display: "flex", gap: "15px", fontSize: "12px", color: "#666" }}>
-                            <span>{item.source}</span>
-                            <span>•</span>
-                            <span>{item.time}</span>
-                            <span>•</span>
-                            <span style={{
-                                color: (item.impact === "STRONGLY BULLISH" || item.impact === "BULLISH") ? ui.theme.success :
-                                    (item.impact === "BEARISH") ? ui.theme.danger :
-                                        "#888"
-                            }}>
-                                Impact: {item.impact}
-                            </span>
-                        </div>
+                {/* Loading and Empty States */}
+                {loading ? (
+                    <div style={{ textAlign: "center", padding: "30px 0", color: "#888" }}>
+                        <p style={{ margin: 0, fontSize: "14px" }}>Analyzing market data...</p>
                     </div>
-                ))}
+                ) : news.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "30px 0", color: "#666" }}>
+                        <p style={{ margin: 0, fontSize: "14px", fontWeight: "500" }}>No recent news catalysts found.</p>
+                        <p style={{ margin: "6px 0 0 0", fontSize: "12px" }}>The AI Market Analyst is monitoring {symbol} for breaking developments.</p>
+                    </div>
+                ) : (
+                    news.map(item => (
+                        <div key={item.id} style={{ display: "flex", flexDirection: "column", gap: "5px", paddingBottom: "15px", borderBottom: "1px dashed #333" }}>
+                            <a href="#" style={{ color: ui.theme.primary, fontSize: "15px", textDecoration: "none", fontWeight: "500", transition: "color 0.2s" }} onMouseOver={e => e.target.style.color = "#fff"} onMouseOut={e => e.target.style.color = ui.theme.primary}>
+                                {item.title}
+                            </a>
+                            <p style={{ margin: 0, color: "#aaa", fontSize: "13px" }}>{item.summary}</p>
+
+                            <div style={{ display: "flex", gap: "15px", fontSize: "12px", color: "#666", marginTop: "4px" }}>
+                                <span>{item.source}</span>
+                                <span>•</span>
+                                <span>{item.time}</span>
+                                <span>•</span>
+                                <span style={{
+                                    color: (item.impact === "STRONGLY BULLISH" || item.impact === "BULLISH") ? ui.theme.success :
+                                        (item.impact === "BEARISH") ? ui.theme.danger :
+                                            "#888"
+                                }}>
+                                    Impact: {item.impact}
+                                </span>
+                            </div>
+                        </div>
+                    ))
+                )}
             </div>
         </div>
     );

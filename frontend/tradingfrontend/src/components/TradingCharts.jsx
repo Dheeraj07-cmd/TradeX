@@ -16,7 +16,6 @@ function TradingChart({ symbol, currentPrice }) {
     useEffect(() => {
         if (!chartContainerRef.current) return;
 
-        // Clean old chart instance
         if (chartRef.current) {
             chartRef.current.remove();
         }
@@ -32,59 +31,11 @@ function TradingChart({ symbol, currentPrice }) {
             },
             width: chartContainerRef.current.clientWidth,
             height: 400,
-
             timeScale: {
-                timeVisible: timeframe === "1D",
+                timeVisible: timeframe === "1D" || timeframe === "1W",
                 secondsVisible: false,
                 rightOffset: 5,
                 barSpacing: timeframe === "1D" ? 8 : 12,
-
-                tickMarkFormatter: (time) => {
-                    const date = new Date(time * 1000);
-
-                    if (timeframe === "1D") {
-                        return date.toLocaleTimeString(
-                            "en-IN",
-                            {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                hour12: false
-                            }
-                        );
-                    }
-
-                    if (timeframe === "1W" || timeframe === "1M") {
-                        return date.toLocaleDateString(
-                            "en-IN",
-                            {
-                                day: "numeric",
-                                month: "short"
-                            }
-                        );
-                    }
-
-                    return date.toLocaleDateString(
-                        "en-IN",
-                        {
-                            month: "short",
-                            year: "2-digit"
-                        }
-                    );
-                }
-            },
-            localization: {
-                // Dynamic hover Tool
-                timeFormatter: (time) => {
-                    const date = new Date(time * 1000);
-                    if (timeframe === "1D" || timeframe === "1W") {
-                        // Detailed hover for Intraday/Hourly
-                        const day = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-                        const timeStr = date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
-                        return `${day}, ${timeStr}`;
-                    }
-                    // Simple hover for Daily candles
-                    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-                }
             },
             crosshair: { mode: 1 },
         });
@@ -92,19 +43,40 @@ function TradingChart({ symbol, currentPrice }) {
         chartRef.current = chart;
 
         const candlestickSeries = chart.addSeries(CandlestickSeries, {
-            upColor: ui.theme.success, downColor: ui.theme.danger,
-            borderVisible: false, wickUpColor: ui.theme.success, wickDownColor: ui.theme.danger,
+            upColor: ui.theme.success, 
+            downColor: ui.theme.danger,
+            borderVisible: false, 
+            wickUpColor: ui.theme.success, 
+            wickDownColor: ui.theme.danger,
         });
+        
         seriesRef.current = candlestickSeries;
 
         const fetchChartData = async () => {
             setLoading(true);
             setHasData(true);
             try {
-                const res = await API.get(`/api/chart/${symbol}/${timeframe}`);
+                const resolutionMap = {
+                    "1D": "5M",
+                    "1W": "1H",
+                    "1M": "1D",
+                    "1Y": "1W" 
+                };
+                
+                const apiResolution = resolutionMap[timeframe];
+                const res = await API.get(`/api/chart/${symbol}/${apiResolution}`);
                 let histData = res.data;
 
                 if (histData && histData.length > 0) {
+                    
+                    histData = histData.map(d => ({
+                        time: Number(d.time),
+                        open: Number(d.open),
+                        high: Number(d.high),
+                        low: Number(d.low),
+                        close: Number(d.close)
+                    }));
+
                     histData.sort((a, b) => a.time - b.time);
 
                     if (timeframe === "1D") {
@@ -113,11 +85,6 @@ function TradingChart({ symbol, currentPrice }) {
                             return new Date(candle.time * 1000).toDateString() === lastCandleDate;
                         });
                     }
-
-                    if (timeframe === "1D") histData = histData.slice(-72);
-                    if (timeframe === "1W") histData = histData.slice(-120);
-                    if (timeframe === "1M") histData = histData.slice(-250);
-                    if (timeframe === "1Y") histData = histData.slice(-365);
 
                     candlestickSeries.setData(histData);
                     lastCandleRef.current = histData[histData.length - 1];
@@ -151,22 +118,41 @@ function TradingChart({ symbol, currentPrice }) {
         if (!seriesRef.current || !lastCandleRef.current || currentPrice === 0 || loading || !hasData) return;
 
         const lastCandle = lastCandleRef.current;
-        const updatedCandle = {
-            ...lastCandle,
-            close: currentPrice,
-            high: Math.max(lastCandle.high, currentPrice),
-            low: Math.min(lastCandle.low, currentPrice),
-        };
+        const nowUnix = Math.floor(Date.now() / 1000);
+
+        const intervalMap = { "1D": 300, "1W": 3600, "1M": 86400, "1Y": 604800 };
+        const interval = intervalMap[timeframe];
+
+        // Apply +5:30 IST offset 
+        const istOffset = 19800; 
+        const adjustedNow = nowUnix + istOffset;
+        
+        const currentBracket = (adjustedNow - (adjustedNow % interval)) - istOffset;
+
+        let updatedCandle;
+
+        if (currentBracket > lastCandle.time) {
+            updatedCandle = {
+                time: currentBracket, 
+                open: currentPrice,
+                high: currentPrice,
+                low: currentPrice,
+                close: currentPrice
+            };
+        } else {
+            updatedCandle = {
+                ...lastCandle,
+                close: currentPrice,
+                high: Math.max(lastCandle.high, currentPrice),
+                low: Math.min(lastCandle.low, currentPrice),
+            };
+        }
 
         seriesRef.current.update(updatedCandle);
         lastCandleRef.current = updatedCandle;
 
-        // Let user explore 1W, 1M, and 1Y 
-        if (timeframe === "1D") {
-            chartRef.current?.timeScale().scrollToRealTime();
-        }
 
-    }, [currentPrice, loading, hasData, timeframe]);
+    }, [currentPrice, timeframe, loading, hasData]);
 
     const getBtnStyle = (tf) => ({
         background: timeframe === tf ? "rgba(56, 126, 209, 0.2)" : "transparent",
@@ -194,19 +180,16 @@ function TradingChart({ symbol, currentPrice }) {
             </div>
 
             <div style={{ position: "relative", width: "100%", height: "400px", borderRadius: "8px", overflow: "hidden" }}>
-
                 {loading && (
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#1e1e1e", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#888" }}>
                         Loading live market data...
                     </div>
                 )}
-
                 {!loading && !hasData && (
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#1e1e1e", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#dc3545" }}>
                         No chart data available for this timeframe.
                     </div>
                 )}
-
                 <div ref={chartContainerRef} style={{ width: "100%", height: "100%" }} />
             </div>
         </div>

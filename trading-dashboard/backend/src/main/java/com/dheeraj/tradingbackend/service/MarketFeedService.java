@@ -17,14 +17,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class MarketFeedService {
 
-    private final MarketSimulatorService simulatorService;
+    private final MarketDataProvider marketDataProvider;
     private final NewsRepository newsRepository;
     private final MarketSummaryRepository summaryRepository;
 
     public MarketDashboardResponse buildDashboard() {
         // Fetch latest 20 news article
         List<NewsArticle> recentNews = newsRepository.findTop20ByOrderByTimestampDesc();
-        List<StockContext> activeStocks = simulatorService.getTopMovingStocksContext(50);
+        List<StockContext> activeStocks = marketDataProvider.getTopMovingStocksContext(50);
 
         List<StockOverview> allStocks = new ArrayList<>();
         List<MoverDTO> gainers = new ArrayList<>();

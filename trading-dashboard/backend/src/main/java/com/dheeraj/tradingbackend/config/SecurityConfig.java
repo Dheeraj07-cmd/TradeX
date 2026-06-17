@@ -32,7 +32,7 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/ws/**", "/ws","/api/otp/**","/api/news/**",
-                        "/api/market-intelligence/**","/actuator/health","/actuator/health/**","/error").permitAll()
+                        "/api/market-intelligence/**","/actuator/health","/actuator/health/**","/api/upstox/**","/error").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

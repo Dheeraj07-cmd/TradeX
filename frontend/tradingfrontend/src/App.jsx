@@ -15,21 +15,21 @@ import "./App.css";
 function App() {
   return (
     <>
-      <Toaster 
-        position="bottom-right" 
+      <Toaster
+        position="bottom-right"
         toastOptions={{
           style: {
             background: '#2c2c2e',
             color: '#fff',
             border: '1px solid #333'
           }
-        }} 
+        }}
       />
 
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        
+
         <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
         <Route path="/positions" element={<Layout><Positions /></Layout>} />
         <Route path="/orders" element={<Layout><Orders /></Layout>} />

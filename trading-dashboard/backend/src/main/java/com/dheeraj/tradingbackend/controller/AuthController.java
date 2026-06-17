@@ -64,7 +64,7 @@ public class AuthController {
         user.setEmail(email);
         user.setPassword(password);
         user.setRole("ROLE_USER");
-        user.setBalance(1000000);
+        user.setBalance(100000);
         user.setUsedMargin(0);
 
         User savedUser = userService.saveUser(user);

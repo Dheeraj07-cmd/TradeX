@@ -21,8 +21,8 @@ public class NewsGeneratorService {
     private final ChatClient chatClient;
     private final NewsRepository newsRepository;
     private final MarketSummaryRepository summaryRepository;
+    private final MarketDataProvider marketDataProvider;
     private final SimpMessagingTemplate messagingTemplate;
-    private final MarketSimulatorService marketSimulatorService;
 
     public record GenAiNewsItem(String symbol, String headline, String summary, String sentimentLabel, int sentimentScore) { }
 
@@ -32,19 +32,18 @@ public class NewsGeneratorService {
     public NewsGeneratorService(ChatClient.Builder chatClientBuilder,
                                 NewsRepository newsRepository,
                                 MarketSummaryRepository summaryRepository,
-                                SimpMessagingTemplate messagingTemplate,
-                                MarketSimulatorService marketSimulatorService) {
+                                SimpMessagingTemplate messagingTemplate, MarketDataProvider marketDataProvider) {
         this.chatClient = chatClientBuilder.build();
         this.newsRepository = newsRepository;
         this.summaryRepository = summaryRepository;
         this.messagingTemplate = messagingTemplate;
-        this.marketSimulatorService = marketSimulatorService;
+        this.marketDataProvider = marketDataProvider;
     }
 
     @Scheduled(fixedRate = 1800000) // Every 30 minutes
     public void executeMarketIntelligenceCycle() {
         try {
-            List<StockContext> activeStocks = marketSimulatorService.getTopMovingStocksContext(10);
+            List<StockContext> activeStocks = marketDataProvider.getTopMovingStocksContext(10);
 
             if (activeStocks == null || activeStocks.isEmpty()) {
                 System.out.println("Market conditions stable. Skipping consolidation cycle.");
