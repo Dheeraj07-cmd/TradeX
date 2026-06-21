@@ -2,6 +2,11 @@ spring:
   application:
     name: tradingbackend
 
+  servlet:
+    multipart:
+      max-file-size: 10MB      # Max size for a single image
+      max-request-size: 30MB
+
   data:
     mongodb:
       uri: ${MONGO_URI}
@@ -24,6 +29,12 @@ upstox:
   api-secret: ${UPSTOX_API_SECRET}
   redirect-uri: ${UPSTOX_REDIRECT_URI}
   access-token: ${UPSTOX_ACCESS_TOKEN}
+
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME}
+  api-key: ${CLOUDINARY_API_KEY}
+  api-secret: ${CLOUDINARY_API_SECRET}
+
 server:
   port: ${PORT:8080}
 

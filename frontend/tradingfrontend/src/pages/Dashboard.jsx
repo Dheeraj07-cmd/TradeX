@@ -3,6 +3,7 @@ import API from "../services/api";
 import Charts from "../components/Charts";
 import * as ui from "../styles/style";
 import { formatCurrency } from "../utils/helpers";
+import KycProgressBanner from "../components/KycProgressBanner";
 import { Client } from "@stomp/stompjs";
 
 function Dashboard() {
@@ -46,7 +47,7 @@ function Dashboard() {
             reconnectDelay: 5000,
             onConnect: () => {
                 console.log("WebSocket Connected!");
-                client.subscribe(`/topic/portfolio/update`, () => {
+                client.subscribe(`/topic/market-update`, () => {
                     console.log("Dashboard Tick");
                     fetchLiveHoldings();
                 });
@@ -66,6 +67,8 @@ function Dashboard() {
         <div style={ui.page}>
             <div style={ui.container}>
                 <h2 style={{ marginBottom: "25px", fontSize: "22px", color: "#e0e0e0" }}>Hi, {username}</h2>
+
+                {profile && <KycProgressBanner user={profile} />}
 
                 <div style={ui.row}>
                     <SummaryCard title="Margin Available" value={profile?.balance || 0} />

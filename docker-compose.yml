@@ -9,7 +9,6 @@ volumes:
     driver: local
 
 services:
-
   redis:
     image: redis:7-alpine
     container_name: tradex-redis
@@ -50,6 +49,9 @@ services:
       - SPRING_AI_OLLAMA_BASE_URL=${SPRING_AI_OLLAMA_BASE_URL}
       - SPRING_AI_OLLAMA_MODEL=${SPRING_AI_OLLAMA_MODEL}
       - SPRING_AI_OLLAMA_TEMPERATURE=${SPRING_AI_OLLAMA_TEMPERATURE}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
       - PORT=${PORT}
     networks:
       - tradex-network

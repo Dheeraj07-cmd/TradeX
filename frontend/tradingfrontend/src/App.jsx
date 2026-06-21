@@ -9,6 +9,8 @@ import Orders from "./pages/Orders";
 import Signup from "./pages/Signup";
 import Layout from "./components/Layout";
 import MarketFeed from "./pages/MarketFeed";
+import Profile from "./pages/Profile";
+import AdminDashboard from "./pages/AdminDashboard";
 
 import "./App.css";
 
@@ -36,6 +38,8 @@ function App() {
         <Route path="/funds" element={<Layout><Funds /></Layout>} />
         <Route path="/stock/:symbol" element={<Layout><StockDetails /></Layout>} />
         <Route path="/market-feed" element={<Layout><MarketFeed /></Layout>} />
+        <Route path="/profile" element={<Layout><Profile /></Layout>} />
+        <Route path="/admin" element={<Layout><AdminDashboard /></Layout>} />
       </Routes>
     </>
   );

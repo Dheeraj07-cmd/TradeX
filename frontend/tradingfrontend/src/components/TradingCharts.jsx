@@ -68,7 +68,6 @@ function TradingChart({ symbol, currentPrice }) {
                 let histData = res.data;
 
                 if (histData && histData.length > 0) {
-                    
                     histData = histData.map(d => ({
                         time: Number(d.time),
                         open: Number(d.open),
@@ -196,4 +195,4 @@ function TradingChart({ symbol, currentPrice }) {
     );
 }
 
-export default TradingChart;
+export default TradingChart;export default TradingChart;

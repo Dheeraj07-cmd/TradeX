@@ -60,8 +60,11 @@ public class OrderService {
         Optional<Holding> holdingOpt = holdingRepository.findByUserIdAndName(userId, stock);
 
         if ("BUY".equalsIgnoreCase(mode)) {
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+            User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+
+            if (!user.isKycVerified()) {
+                throw new IllegalStateException("KYC_RESTRICTION: You must complete identity verification to place trades.");
+            }
 
             double totalCost = qty * price;
 

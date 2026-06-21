@@ -39,16 +39,6 @@ public class UserController {
         this.transactionRepository = transactionRepository;
     }
 
-    @GetMapping("/profile")
-    public User getProfile(HttpServletRequest request) {
-        String userId = (String) request.getAttribute("userId");
-        if (userId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or missing token");
-        }
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-    }
-
     @PostMapping("/funds")
     public ResponseEntity<?> updateFunds(@RequestBody FundsRequest fundsRequest, HttpServletRequest request) {
         try {
@@ -56,8 +46,11 @@ public class UserController {
             double amount = fundsRequest.getAmount();
             String action = fundsRequest.getAction().toUpperCase(); // deposit or withdraw
 
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+            User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+
+            if (!user.isKycVerified()) {
+                throw new IllegalStateException("KYC_RESTRICTION: You must complete identity verification to place trades.");
+            }
 
             FundTransaction txn = new FundTransaction();
             txn.setUserId(userId);
@@ -125,5 +118,4 @@ public class UserController {
         List<FundTransaction> history = transactionRepository.findByUserIdOrderByDateDesc(userId);
         return ResponseEntity.ok(history);
     }
-
 }
