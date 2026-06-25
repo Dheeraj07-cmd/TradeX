@@ -12,10 +12,13 @@ public class UserProfileDto {
     private String phoneNumber;
     private String address;
     private String nomineeName;
+    private String dateOfBirth;
 
     // Masked fields for UI
     private String panNumber;      // "ABCDEXXXXF"
+    private boolean hasPan;
     private String aadhaarNumber;  // "XXXX-XXXX-1234"
+    private boolean hasAadhaar;
 
     private String bankAccountNumber;
     private String ifscCode;

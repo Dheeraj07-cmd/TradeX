@@ -20,7 +20,7 @@ public class UpstoxController {
     // This endpoint catches the redirect from Upstox login page
     @GetMapping("/callback")
     public ResponseEntity<String> handleUpstoxCallback(@RequestParam("code") String authCode) {
-        System.out.println("Received Auth Code from Upstox: " + authCode);
+        System.out.println("Received Auth Code from Upstox");
 
         // Only valid for 24 hours after that regenerate
         authService.generateAndSetAccessToken(authCode);

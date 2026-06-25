@@ -6,59 +6,90 @@ import { formatCurrency } from "../utils/helpers";
 import KycProgressBanner from "../components/KycProgressBanner";
 import { Client } from "@stomp/stompjs";
 
+const SummaryCard = ({ title, value }) => (
+    <div style={{ ...ui.card, ...ui.flexItem, borderTop: "3px solid #333" }}>
+        <p style={ui.title}>{title}</p>
+        <h2 style={ui.value}>{formatCurrency(value)}</h2>
+    </div>
+);
+
 function Dashboard() {
     const [holdings, setHoldings] = useState([]);
     const [realizedPnl, setRealizedPnl] = useState(0);
     const [unrealizedPnl, setUnrealizedPnl] = useState(0);
     const [profile, setProfile] = useState(null);
 
-    // dynamically calculates live P&L using Redis prices
-    const investedValue = holdings.reduce((sum, h) => sum + h.avg * h.qty, 0);
-    const currentValue = holdings.reduce((sum, h) => sum + h.price * h.qty, 0);
+    // Dynamically calculate live P&L
+    const investedValue = holdings.reduce((sum, h) => sum + (Number(h.avg || 0) * Number(h.qty || 0)), 0);
+    const currentValue = holdings.reduce((sum, h) => sum + (Number(h.price || 0) * Number(h.qty || 0)), 0);
     const totalPnl = currentValue - investedValue;
     const totalPnlPercent = investedValue > 0 ? ((totalPnl / investedValue) * 100).toFixed(2) : 0;
 
     useEffect(() => {
-        const fetchInitialData = async () => {
+        let stompClient = null;
+        const token = localStorage.getItem("token") || localStorage.getItem("jwt");
+
+        const initializeDashboard = async () => {
             try {
-                const holdingsRes = await API.get("/api/holdings");
-                const realizedRes = await API.get("/api/orders/pnl");
-                const unrealizedRes = await API.get("/api/orders/unrealized");
-                const profileRes = await API.get("/api/user/profile");
+                // Fetch all dashboard metrics 
+                const [holdingsRes, realizedRes, unrealizedRes, profileRes] = await Promise.all([
+                    API.get("/api/holdings"),
+                    API.get("/api/orders/pnl"),
+                    API.get("/api/orders/unrealized"),
+                    API.get("/api/user/profile")
+                ]);
 
                 setHoldings(holdingsRes.data);
                 setRealizedPnl(realizedRes.data);
                 setUnrealizedPnl(unrealizedRes.data);
                 setProfile(profileRes.data);
-            } catch (err) { console.error(err); }
-        };
 
-        const fetchLiveHoldings = async () => {
-            try {
-                const holdingsRes = await API.get("/api/holdings");
-                setHoldings([...holdingsRes.data]);
-            } catch (err) { console.error(err); }
-        };
+                const userId = profileRes.data?.id;
+                const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
+                const wsUrl = baseUrl.startsWith("https") ? baseUrl.replace("https", "wss") : baseUrl.replace("http", "ws");
 
-        fetchInitialData();
+                stompClient = new Client({
+                    brokerURL: `${wsUrl}/ws`,
+                    connectHeaders: {
+                        Authorization: `Bearer ${token}`
+                    },
+                    reconnectDelay: 5000,
+                    onConnect: () => {
+                        console.log("Secure WebSocket Connected!");
 
-        const client = new Client({
-            brokerURL: `${import.meta.env.VITE_API_URL.replace("http", "ws")}/ws`,
-            reconnectDelay: 5000,
-            onConnect: () => {
-                console.log("WebSocket Connected!");
-                client.subscribe(`/topic/market-update`, () => {
-                    console.log("Dashboard Tick");
-                    fetchLiveHoldings();
+                        // Listen for global market ticks
+                        stompClient.subscribe("/topic/market-update", () => {
+                            // Tick received
+                        });
+
+                        if (userId) {
+                            stompClient.subscribe(`/topic/holdings/${userId}`, (message) => {
+                                if (message.body) {
+                                    const updatedHoldings = JSON.parse(message.body);
+                                    setHoldings(updatedHoldings);
+                                }
+                            });
+                        }
+                    },
+                    onStompError: (frame) => {
+                        console.error('Broker reported error: ' + frame.headers['message']);
+                    }
                 });
-            },
-            onStompError: (frame) => {
-                console.error('Broker reported error: ' + frame.headers['message']);
-            }
-        });
 
-        client.activate();
-        return () => { client.deactivate(); };
+                stompClient.activate();
+
+            } catch (err) {
+                console.error("Dashboard initialization error:", err);
+            }
+        };
+
+        initializeDashboard();
+
+        return () => {
+            if (stompClient) {
+                stompClient.deactivate();
+            }
+        };
     }, []);
 
     const username = localStorage.getItem("username") || "User";
@@ -77,18 +108,10 @@ function Dashboard() {
 
                     <div style={{ ...ui.card, ...ui.flexItem, borderTop: totalPnl >= 0 ? "3px solid #28a745" : "3px solid #dc3545" }}>
                         <p style={ui.title}>Overall P&L</p>
-                        <h2 style={{
-                            ...ui.value,
-                            color: totalPnl >= 0 ? "#28a745" : "#dc3545",
-                            fontSize: "28px"
-                        }}>
+                        <h2 style={{ ...ui.value, color: totalPnl >= 0 ? "#28a745" : "#dc3545", fontSize: "28px" }}>
                             {formatCurrency(totalPnl)}
                         </h2>
-                        <small style={{
-                            color: totalPnl >= 0 ? "#28a745" : "#dc3545",
-                            fontWeight: "600",
-                            fontSize: "13px"
-                        }}>
+                        <small style={{ color: totalPnl >= 0 ? "#28a745" : "#dc3545", fontWeight: "600", fontSize: "13px" }}>
                             {totalPnl >= 0 ? "▲" : "▼"} {totalPnlPercent}%
                         </small>
                     </div>
@@ -152,12 +175,5 @@ function Dashboard() {
         </div>
     );
 }
-
-const SummaryCard = ({ title, value }) => (
-    <div style={{ ...ui.card, ...ui.flexItem, borderTop: "3px solid #333" }}>
-        <p style={ui.title}>{title}</p>
-        <h2 style={ui.value}>{formatCurrency(value)}</h2>
-    </div>
-);
 
 export default Dashboard;

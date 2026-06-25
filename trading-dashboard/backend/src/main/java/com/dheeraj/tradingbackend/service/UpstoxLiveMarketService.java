@@ -140,24 +140,26 @@ public class UpstoxLiveMarketService implements MarketDataProvider {
         if (livePriceCache.isEmpty()) return;
         boolean hasUpdates = false;
 
+        Map<String, String> hashUpdates = new HashMap<>();
+
         for (Map.Entry<String, Double> entry : livePriceCache.entrySet()) {
             String symbol = instrumentToSymbol.get(entry.getKey());
             if (symbol == null) continue;
 
             Double currentPrice = entry.getValue();
 
-            try {
-                redisTemplate.opsForValue().set("live_price:" + symbol, String.valueOf(currentPrice));
-            } catch (Exception ignored) {
-            }
+            hashUpdates.put(symbol, String.valueOf(currentPrice));
 
-            // Send UI tick once per 3 seconds
             messagingTemplate.convertAndSend("/topic/price/" + symbol, currentPrice);
             generateAndBroadcastMockDepth(symbol, currentPrice);
             hasUpdates = true;
         }
 
         if (hasUpdates) {
+            try {
+                redisTemplate.opsForHash().putAll("live_prices", hashUpdates);
+            } catch (Exception ignored) {}
+
             messagingTemplate.convertAndSend("/topic/market-update", "tick");
         }
     }

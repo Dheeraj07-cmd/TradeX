@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import * as ui from "../styles/style";
 
+const labelStyle = { display: "block", fontSize: "12px", color: ui.theme.textLight, marginBottom: "6px", fontWeight: "600" };
+
 function Profile() {
     const [profile, setProfile] = useState({
-        name: '', email: '', phoneNumber: '', address: '', nomineeName: '',
+        name: '', email: '', phoneNumber: '', dateOfBirth: '', address: '', nomineeName: '',
         panNumber: '', aadhaarNumber: '', bankAccountNumber: '', ifscCode: '',
         balance: 0, kycStatus: 'NOT_STARTED', adminRemarks: '',
-        panDocUrl: '', aadhaarFrontUrl: '', aadhaarBackUrl: ''
+        panDocUrl: '', aadhaarFrontUrl: '', aadhaarBackUrl: '',
+        hasPan: false, panMasked: '', hasAadhaar: false, aadhaarMasked: ''
     });
 
     const [files, setFiles] = useState({ panCard: null, aadhaarFront: null, aadhaarBack: null });
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    const [passwordLoading, setPasswordLoading] = useState(false);
 
     useEffect(() => {
         fetchProfileData();
@@ -31,16 +36,20 @@ function Profile() {
 
             const data = await res.json();
 
-
-            // Replace any null or undefined fields with an empty string.
+            // Keep raw pan/aadhaar empty to prevent sending masks back to server
             const sanitizedData = {
                 name: data.name || '',
                 email: data.email || '',
                 phoneNumber: data.phoneNumber || '',
+                dateOfBirth: data.dateOfBirth || '',
                 address: data.address || '',
                 nomineeName: data.nomineeName || '',
-                panNumber: data.panNumber || '',
-                aadhaarNumber: data.aadhaarNumber || '',
+                panNumber: '',
+                aadhaarNumber: '',
+                hasPan: data.hasPan || false,
+                panMasked: data.panMasked || '',
+                hasAadhaar: data.hasAadhaar || false,
+                aadhaarMasked: data.aadhaarMasked || '',
                 bankAccountNumber: data.bankAccountNumber || '',
                 ifscCode: data.ifscCode || '',
                 balance: data.balance || 0,
@@ -64,6 +73,47 @@ function Profile() {
 
     const handleFileChange = (e) => {
         setFiles({ ...files, [e.target.name]: e.target.files[0] });
+    };
+
+    const handlePasswordChange = async (e) => {
+        e.preventDefault();
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            alert("Passwords do not match!");
+            return;
+        }
+        if (passwordData.newPassword.length < 6) {
+            alert("Password must be at least 6 characters long.");
+            return;
+        }
+
+        setPasswordLoading(true);
+        try {
+            const token = localStorage.getItem("token") || localStorage.getItem("jwt");
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/user/profile/change-password`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    currentPassword: passwordData.currentPassword,
+                    newPassword: passwordData.newPassword
+                })
+            });
+
+            if (res.ok) {
+                alert("Password updated successfully! Next time you log in, use your new password.");
+                setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            } else {
+                const errText = await res.text();
+                alert(`Failed to update password: ${errText}`);
+            }
+        } catch (err) {
+            console.error("Password update error", err);
+            alert("Network error while updating password.");
+        } finally {
+            setPasswordLoading(false);
+        }
     };
 
     const saveProfileData = async () => {
@@ -126,7 +176,7 @@ function Profile() {
             }
         } catch (err) {
             console.error("KYC File Transmission Interrupted", err);
-            alert("Network error: The upload was interrupted. Check your backend console for Cloudinary credential errors or file size limits.");
+            alert("Network error: The upload was interrupted. Check your backend console for Cloudinary credential errors.");
         } finally {
             setLoading(false);
         }
@@ -141,10 +191,7 @@ function Profile() {
         else if (status === "REJECTED") { color = ui.theme.danger; text = "🔴 Verification Rejected"; }
 
         return (
-            <span style={{
-                padding: "6px 12px", borderRadius: "20px", fontSize: "12px",
-                fontWeight: "bold", border: `1px solid ${color}`, color: color
-            }}>
+            <span style={{ padding: "6px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "bold", border: `1px solid ${color}`, color: color }}>
                 {text}
             </span>
         );
@@ -169,11 +216,12 @@ function Profile() {
                 )}
 
                 <div style={ui.row}>
-                    {/* Forms */}
+                    {/* Forms & Security */}
                     <div style={{ ...ui.flexItem, display: "flex", flexDirection: "column", gap: "20px" }}>
 
                         <div style={ui.card}>
                             <h3 style={{ ...ui.title, borderBottom: `1px solid ${ui.theme.border}`, paddingBottom: "10px", marginBottom: "15px" }}>Personal Details</h3>
+
                             <label style={labelStyle}>Full Legal Name</label>
                             <input type="text" name="name" disabled={!isEditing} value={profile.name} onChange={handleInputChange} style={{ ...ui.input, opacity: isEditing ? 1 : 0.6 }} />
 
@@ -191,19 +239,60 @@ function Profile() {
 
                             <label style={labelStyle}>Nominee Name</label>
                             <input type="text" name="nomineeName" disabled={!isEditing} value={profile.nomineeName} onChange={handleInputChange} style={{ ...ui.input, opacity: isEditing ? 1 : 0.6 }} placeholder="Name of your account nominee" />
-                        </div>
 
-                        <div style={ui.card}>
-                            <h3 style={{ ...ui.title, borderBottom: `1px solid ${ui.theme.border}`, paddingBottom: "10px", marginBottom: "15px" }}>Banking & Settlement</h3>
+                            <h3 style={{ ...ui.title, borderBottom: `1px solid ${ui.theme.border}`, paddingBottom: "10px", marginBottom: "15px", marginTop: "15px" }}>Banking & Settlement</h3>
+
                             <label style={labelStyle}>Bank Account Number</label>
                             <input type="text" name="bankAccountNumber" disabled={!isEditing} value={profile.bankAccountNumber} onChange={handleInputChange} style={{ ...ui.input, opacity: isEditing ? 1 : 0.6 }} />
 
                             <label style={labelStyle}>IFSC Routing Token</label>
                             <input type="text" name="ifscCode" disabled={!isEditing} value={profile.ifscCode} onChange={handleInputChange} style={{ ...ui.input, opacity: isEditing ? 1 : 0.6 }} />
                         </div>
+
+                        {/* Security Card */}
+                        <div style={ui.card}>
+                            <h3 style={{ ...ui.title, borderBottom: `1px solid ${ui.theme.border}`, paddingBottom: "10px", marginBottom: "15px", color: "rgb(56, 126, 209)" }}>
+                                Security
+                            </h3>
+                            <form onSubmit={handlePasswordChange}>
+                                <label style={labelStyle}>Current Password</label>
+                                <input
+                                    type="password"
+                                    value={passwordData.currentPassword}
+                                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                                    style={ui.input}
+                                    placeholder="Enter current password"
+                                    required
+                                />
+
+                                <label style={labelStyle}>New Password</label>
+                                <input
+                                    type="password"
+                                    value={passwordData.newPassword}
+                                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                    style={ui.input}
+                                    placeholder="Enter new password"
+                                    required
+                                />
+
+                                <label style={labelStyle}>Confirm New Password</label>
+                                <input
+                                    type="password"
+                                    value={passwordData.confirmPassword}
+                                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                                    style={ui.input}
+                                    placeholder="Confirm new password"
+                                    required
+                                />
+
+                                <button type="submit" disabled={passwordLoading} style={{ ...ui.button, backgroundColor: "#387ed1", color: "#ffffff", marginTop: "10px" }}>
+                                    {passwordLoading ? "Updating..." : "Change Password"}
+                                </button>
+                            </form>
+                        </div>
                     </div>
 
-                    {/* Documents */}
+                    {/* Capital & KYC Documents */}
                     <div style={{ ...ui.flexItem, display: "flex", flexDirection: "column", gap: "20px" }}>
 
                         <div style={{ ...ui.card, backgroundColor: "#111", borderLeft: `4px solid ${ui.theme.primary}` }}>
@@ -218,10 +307,38 @@ function Profile() {
                             <h3 style={{ ...ui.title, borderBottom: `1px solid ${ui.theme.border}`, paddingBottom: "10px", marginBottom: "15px" }}>Identity Credentials</h3>
 
                             <label style={labelStyle}>PAN Number</label>
-                            <input type="text" name="panNumber" disabled={!isEditing || profile.kycStatus === 'APPROVED'} value={profile.panNumber} onChange={handleInputChange} style={{ ...ui.input, opacity: isEditing ? 1 : 0.6, textTransform: "uppercase" }} />
+                            {profile.hasPan && !isEditing ? (
+                                <div style={{ ...ui.input, opacity: 0.8, backgroundColor: "#1a1a1a", border: "1px solid #333", display: "flex", alignItems: "center", color: "#aaa" }}>
+                                    <span style={{ color: ui.theme.success, marginRight: "8px" }}>✔</span> {profile.panMasked} (Verified)
+                                </div>
+                            ) : (
+                                <input
+                                    type="text"
+                                    name="panNumber"
+                                    disabled={profile.kycStatus === 'APPROVED'}
+                                    value={profile.panNumber || ''}
+                                    onChange={handleInputChange}
+                                    style={{ ...ui.input, opacity: isEditing ? 1 : 0.6, textTransform: "uppercase" }}
+                                    placeholder={profile.hasPan ? "Leave blank to keep existing PAN" : "Enter your exact PAN"}
+                                />
+                            )}
 
                             <label style={labelStyle}>National ID Mapping</label>
-                            <input type="text" name="aadhaarNumber" disabled={!isEditing || profile.kycStatus === 'APPROVED'} value={profile.aadhaarNumber} onChange={handleInputChange} style={{ ...ui.input, opacity: isEditing ? 1 : 0.6 }} />
+                            {profile.hasAadhaar && !isEditing ? (
+                                <div style={{ ...ui.input, opacity: 0.8, backgroundColor: "#1a1a1a", border: "1px solid #333", display: "flex", alignItems: "center", color: "#aaa" }}>
+                                    <span style={{ color: ui.theme.success, marginRight: "8px" }}>✔</span> {profile.aadhaarMasked} (Verified)
+                                </div>
+                            ) : (
+                                <input
+                                    type="text"
+                                    name="aadhaarNumber"
+                                    disabled={profile.kycStatus === 'APPROVED'}
+                                    value={profile.aadhaarNumber || ''}
+                                    onChange={handleInputChange}
+                                    style={{ ...ui.input, opacity: isEditing ? 1 : 0.6 }}
+                                    placeholder={profile.hasAadhaar ? "Leave blank to keep existing ID" : "Enter 12-digit ID"}
+                                />
+                            )}
 
                             {(profile.kycStatus === 'NOT_STARTED' || profile.kycStatus === 'REJECTED') && (
                                 <form onSubmit={submitKycDocuments} style={{ marginTop: "20px", paddingTop: "20px", borderTop: `1px dashed ${ui.theme.border}` }}>
@@ -236,7 +353,7 @@ function Profile() {
                                     <label style={labelStyle}>ID Mapping Back Image</label>
                                     <input type="file" name="aadhaarBack" onChange={handleFileChange} style={{ ...ui.input, padding: "8px" }} accept="image/jpeg,image/png" />
 
-                                    <button type="submit" disabled={loading} style={{ ...ui.button, backgroundColor: loading ? "#555" : ui.theme.primary }}>
+                                    <button type="submit" disabled={loading} style={{ ...ui.button, backgroundColor: loading ? "#555" : ui.theme.primary, marginTop: "15px" }}>
                                         {loading ? "Transmitting Artifacts..." : "Submit KYC Package"}
                                     </button>
                                 </form>
@@ -248,13 +365,15 @@ function Profile() {
                 <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-end", gap: "15px", borderTop: `1px solid ${ui.theme.border}`, paddingTop: "20px" }}>
                     {isEditing ? (
                         <>
-                            <button onClick={() => setIsEditing(false)} style={{ ...ui.button, width: "auto", padding: "10px 20px", backgroundColor: "transparent", border: `1px solid ${ui.theme.border}` }}>Cancel</button>
+                            <button onClick={() => setIsEditing(false)}
+                                style={{ ...ui.button, width: "auto", padding: "10px 20px", backgroundColor: "transparent", border: `1px solid ${ui.theme.border}` }}>Cancel</button>
                             <button onClick={saveProfileData} disabled={loading} style={{ ...ui.button, width: "auto", padding: "10px 30px" }}>
                                 {loading ? "Saving..." : "Commit Update"}
                             </button>
                         </>
                     ) : (
-                        <button onClick={() => setIsEditing(true)} style={{ ...ui.button, width: "auto", padding: "10px 30px" }}>
+                        <button onClick={() => setIsEditing(true)}
+                            style={{ ...ui.button, width: "auto", padding: "10px 30px" }}>
                             Modify Profile
                         </button>
                     )}
@@ -264,7 +383,5 @@ function Profile() {
         </div>
     );
 }
-
-const labelStyle = { display: "block", fontSize: "12px", color: ui.theme.textLight, marginBottom: "6px", fontWeight: "600" };
 
 export default Profile;

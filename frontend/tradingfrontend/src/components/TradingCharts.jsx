@@ -195,4 +195,5 @@ function TradingChart({ symbol, currentPrice }) {
     );
 }
 
-export default TradingChart;export default TradingChart;
+export default TradingChart;
+

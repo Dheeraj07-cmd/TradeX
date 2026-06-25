@@ -5,6 +5,7 @@ import com.dheeraj.tradingbackend.repository.*;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
@@ -37,41 +38,41 @@ public class OrderService {
         this.redisTemplate = redisTemplate;
     }
 
+    @Transactional
     public Order createOrder(Order order) {
-
         String userId = order.getUserId();
         String stock = order.getName();
         int qty = order.getQty();
         double price = order.getPrice();
         String mode = order.getMode();
 
-        // Fetch Live Price directly from Redis cache
-        if (price == 0) {
-            String livePriceStr = redisTemplate.opsForValue().get("live_price:" + stock);
-            if (livePriceStr == null) {
-                throw new RuntimeException("Cannot find live price for Market Order.");
-            }
-            price = Double.parseDouble(livePriceStr);
-            order.setPrice(price);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Enforce KYC for ALL trades
+        if (!user.isKycVerified()) {
+            throw new IllegalStateException("KYC_RESTRICTION: You must complete identity verification to place trades.");
         }
 
+        // Fetch Live Price from Redis cache
+        if (price == 0) {
+            Object livePriceObj = redisTemplate.opsForHash().get("live_prices", stock);
+            if (livePriceObj == null) {
+                throw new RuntimeException("Cannot find live market price for Market Order execution.");
+            }
+            price = Double.parseDouble(livePriceObj.toString());
+            order.setPrice(price);
+        }
 
         /* HOLDINGS LOGIC */
         Optional<Holding> holdingOpt = holdingRepository.findByUserIdAndName(userId, stock);
 
         if ("BUY".equalsIgnoreCase(mode)) {
-            User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
-
-            if (!user.isKycVerified()) {
-                throw new IllegalStateException("KYC_RESTRICTION: You must complete identity verification to place trades.");
-            }
-
             double totalCost = qty * price;
 
             if (user.getBalance() < totalCost) {
                 throw new RuntimeException("Insufficient balance");
             }
-
             user.setBalance(user.getBalance() - totalCost);
             userRepository.save(user);
 
@@ -86,7 +87,6 @@ public class OrderService {
                 h.setPrice(price);
 
                 holdingRepository.save(h);
-
             } else {
                 Holding h = new Holding();
                 h.setUserId(userId);
@@ -100,23 +100,18 @@ public class OrderService {
         }
 
         if ("SELL".equalsIgnoreCase(mode)) {
-            Holding h = holdingRepository
-                    .findByUserIdAndName(userId, stock)
+            Holding h = holdingOpt
                     .orElseThrow(() -> new RuntimeException("Holding not found for this stock"));
 
             if (h.getQty() < qty) {
                 throw new RuntimeException("Not enough quantity to sell");
             }
 
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-
             double totalSellValue = qty * price;
             user.setBalance(user.getBalance() + totalSellValue);
             userRepository.save(user);
 
             int remainingQty = h.getQty() - qty;
-
             if (remainingQty == 0) {
                 holdingRepository.delete(h);
             } else {
@@ -125,12 +120,10 @@ public class OrderService {
             }
         }
 
-
         /* POSITIONS LOGIC */
         Optional<Position> posOpt = positionRepository.findByUserIdAndName(userId, stock);
 
         if ("BUY".equalsIgnoreCase(mode)) {
-
             if (posOpt.isPresent()) {
                 Position p = posOpt.get();
 
@@ -147,7 +140,6 @@ public class OrderService {
                 p.setLoss(pnl < 0);
 
                 positionRepository.save(p);
-
             } else {
                 Position p = new Position();
                 p.setUserId(userId);
@@ -165,9 +157,7 @@ public class OrderService {
         }
 
         if ("SELL".equalsIgnoreCase(mode)) {
-
-            Position p = positionRepository
-                    .findByUserIdAndName(userId, stock)
+            Position p = posOpt
                     .orElseThrow(() -> new RuntimeException("Position not found for this stock"));
 
             if (p.getQty() < qty) {
@@ -192,7 +182,15 @@ public class OrderService {
             }
         }
 
-        messagingTemplate.convertAndSend( "/topic/portfolio/update", "tick");
+        // Push Live Updates for Holdings, Positions, and Account Margin
+        List<Holding> updatedHoldings = holdingRepository.findByUserId(userId);
+        messagingTemplate.convertAndSend("/topic/holdings/" + userId, updatedHoldings);
+
+        List<Position> updatedPositions = positionRepository.findByUserId(userId);
+        messagingTemplate.convertAndSend("/topic/positions/" + userId, updatedPositions);
+
+        messagingTemplate.convertAndSend("/topic/margin/" + userId, user.getBalance());
+
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
         order.setOrderDate(LocalDateTime.now().format(formatter));
 
@@ -249,6 +247,3 @@ public class OrderService {
         return orderRepository.findByUserId(userId);
     }
 }
-
-
-

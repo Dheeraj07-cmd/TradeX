@@ -35,9 +35,11 @@ public class CloudinaryStorageService {
 
     public String uploadDocument(MultipartFile file, String documentType, String userId) {
         try {
+            // By using "PAN_user123", Cloudinary will auto-delete the old one and overwrite it
             Map uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
                     "folder", "tradex_kyc/" + userId,
-                    "public_id", documentType + "_" + System.currentTimeMillis()
+                    "public_id", documentType + "_" + userId,
+                    "overwrite", true
             ));
             return uploadResult.get("secure_url").toString();
         } catch (Exception e) {
