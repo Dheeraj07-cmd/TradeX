@@ -69,8 +69,13 @@ function LiveNews({ symbol }) {
             ? apiUrl.replace("https", "wss")
             : apiUrl.replace("http", "ws");
 
+        const token = localStorage.getItem("token") || localStorage.getItem("jwt");
+
         const client = new Client({
             brokerURL: `${wsUrl}/ws`,
+            connectHeaders: {
+                Authorization: `Bearer ${token}`
+            },
             reconnectDelay: 5000,
             onConnect: () => {
                 client.subscribe(`/topic/news/${symbol}`, (message) => {

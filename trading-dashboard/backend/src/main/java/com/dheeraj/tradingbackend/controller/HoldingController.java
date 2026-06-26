@@ -26,9 +26,9 @@ public class HoldingController {
         List<Holding> holdings = holdingService.getHoldingsByUserId(userId);
 
         for (Holding h : holdings) {
-            String redisPrice = redisTemplate.opsForValue().get("live_price:" + h.getName());
-            if (redisPrice != null) {
-                h.setPrice(Double.parseDouble(redisPrice));
+            Object redisPriceObj = redisTemplate.opsForHash().get("live_prices", h.getName());
+            if (redisPriceObj != null) {
+                h.setPrice(Double.parseDouble(redisPriceObj.toString()));
             }
         }
 

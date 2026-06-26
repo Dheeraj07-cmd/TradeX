@@ -25,8 +25,13 @@ function Positions({ openOrderModal }) {
 
     fetchPositions();
 
+    const token = localStorage.getItem("token") || localStorage.getItem("jwt");
+
     const client = new Client({
       brokerURL: `${import.meta.env.VITE_API_URL.replace("http", "ws")}/ws`,
+      connectHeaders: {
+        Authorization: `Bearer ${token}`
+      },
       reconnectDelay: 5000,
       onConnect: () => {
         console.log("WebSocket Connected!");

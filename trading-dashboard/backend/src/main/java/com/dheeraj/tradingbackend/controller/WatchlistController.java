@@ -112,12 +112,11 @@ public class WatchlistController {
 
     private void applyLivePrices(List<Watchlist> watchlists) {
         for (Watchlist watchlist : watchlists) {
-            String redisKey = "live_price:" + watchlist.getSymbol();
-            String livePrice = redisTemplate.opsForValue().get(redisKey);
+            Object livePriceObj = redisTemplate.opsForHash().get("live_prices", watchlist.getSymbol());
 
-            if (livePrice != null) {
+            if (livePriceObj != null) {
                 try {
-                    double latestPrice = Double.parseDouble(livePrice);
+                    double latestPrice = Double.parseDouble(livePriceObj.toString());
                     watchlist.setPrice(latestPrice);
 
                     // Calculate strictly against the locked basePrice

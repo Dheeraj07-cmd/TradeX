@@ -66,9 +66,13 @@ function Watchlist({ openOrderModal }) {
             const initialList = await fetchInitialWatchlist(activeTab);
             if (!isMounted) return;
 
+            const token = localStorage.getItem("token") || localStorage.getItem("jwt");
+
             const client = new Client({
                 brokerURL: `${import.meta.env.VITE_API_URL.replace("http", "ws")}/ws`,
-                reconnectDelay: 5000,
+                connectHeaders: {
+                    Authorization: `Bearer ${token}`
+                }, reconnectDelay: 5000,
                 onConnect: () => {
                     initialList.forEach(stock => {
                         const topic = `/topic/price/${stock.symbol}`;

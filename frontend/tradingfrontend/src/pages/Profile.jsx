@@ -131,9 +131,14 @@ function Profile() {
             if (res.ok) {
                 setIsEditing(false);
                 fetchProfileData();
+                alert("Profile successfully updated!");
+            } else {
+                const errorText = await res.text();
+                alert(`Update Rejected: ${errorText}`);
             }
         } catch (err) {
             console.error("Error persisting user profile changes", err);
+            alert("Network Error: Could not reach the server.");
         } finally {
             setLoading(false);
         }

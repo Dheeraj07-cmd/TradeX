@@ -8,7 +8,7 @@ function KycProgressBanner({ user }) {
     const isVerified = user?.kycStatus === "APPROVED";
     const isPending = user?.kycStatus === "PENDING_REVIEW";
     const isRejected = user?.kycStatus === "REJECTED";
-    const hasProfileData = user?.panNumber && user.panNumber !== "Not Provided";
+    const hasProfileData = user?.hasPan;
 
     if (!user || isVerified) return null;
 

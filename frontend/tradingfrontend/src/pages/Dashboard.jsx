@@ -44,6 +44,8 @@ function Dashboard() {
                 setUnrealizedPnl(unrealizedRes.data);
                 setProfile(profileRes.data);
 
+                if (!token || token === "null") return;
+
                 const userId = profileRes.data?.id;
                 const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
                 const wsUrl = baseUrl.startsWith("https") ? baseUrl.replace("https", "wss") : baseUrl.replace("http", "ws");
@@ -58,8 +60,19 @@ function Dashboard() {
                         console.log("Secure WebSocket Connected!");
 
                         // Listen for global market ticks
-                        stompClient.subscribe("/topic/market-update", () => {
-                            // Tick received
+                        stompClient.subscribe("/topic/market-prices", (message) => {
+                            if (message.body) {
+                                const livePrices = JSON.parse(message.body); // { "TCS": "3800", "RELIANCE": "2500" }
+
+                                // Instantly update the prices of the holdings in memory
+                                setHoldings(prevHoldings => prevHoldings.map(holding => {
+                                    // holding.name contains stock symbol (TCS, Reliance)
+                                    if (livePrices[holding.name]) {
+                                        return { ...holding, price: parseFloat(livePrices[holding.name]) };
+                                    }
+                                    return holding;
+                                }));
+                            }
                         });
 
                         if (userId) {
@@ -75,14 +88,11 @@ function Dashboard() {
                         console.error('Broker reported error: ' + frame.headers['message']);
                     }
                 });
-
                 stompClient.activate();
-
             } catch (err) {
                 console.error("Dashboard initialization error:", err);
             }
         };
-
         initializeDashboard();
 
         return () => {

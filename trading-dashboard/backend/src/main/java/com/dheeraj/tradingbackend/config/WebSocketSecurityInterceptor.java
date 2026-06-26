@@ -32,13 +32,13 @@ public class WebSocketSecurityInterceptor implements WebSocketMessageBrokerConfi
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
                 StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
 
-                if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
+                if (StompCommand.CONNECT.equals(accessor.getCommand())) {
                     String authHeader = accessor.getFirstNativeHeader("Authorization");
 
-                    if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                    // Ignore connections if the token is null
+                    if (authHeader != null && authHeader.startsWith("Bearer ") && !authHeader.contains("null")) {
                         String token = authHeader.substring(7);
                         try {
-                            // Extract JWT claims
                             Claims claims = jwtUtil.extractClaims(token);
                             String userId = claims.getSubject();
 
@@ -47,10 +47,12 @@ public class WebSocketSecurityInterceptor implements WebSocketMessageBrokerConfi
                             accessor.setUser(auth);
 
                         } catch (Exception e) {
-                            throw new AccessDeniedException("Invalid WebSocket STOMP JWT Token.");
+                            System.err.println("WebSocket JWT rejected.");
+                            return null;
                         }
                     } else {
-                        throw new AccessDeniedException("Missing Authorization header in STOMP request.");
+                        System.err.println("WebSocket missing token.");
+                        return null;
                     }
                 }
                 return message;

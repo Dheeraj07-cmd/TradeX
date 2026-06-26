@@ -33,12 +33,11 @@ public class PositionController {
 
     private void applyLivePrices(List<Position> positions) {
         for (Position position : positions) {
-            String redisKey = "live_price:" + position.getName();
-            String livePrice = redisTemplate.opsForValue().get(redisKey);
+            Object livePriceObj = redisTemplate.opsForHash().get("live_prices", position.getName());
 
-            if (livePrice != null) {
+            if (livePriceObj != null) {
                 try {
-                    double latestPrice = Double.parseDouble(livePrice);
+                    double latestPrice = Double.parseDouble(livePriceObj.toString());
                     position.setPrice(latestPrice);
 
                     double unrealizedPnl = (latestPrice - position.getAvg()) * position.getQty();

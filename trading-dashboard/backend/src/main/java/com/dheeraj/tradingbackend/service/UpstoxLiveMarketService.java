@@ -147,7 +147,6 @@ public class UpstoxLiveMarketService implements MarketDataProvider {
             if (symbol == null) continue;
 
             Double currentPrice = entry.getValue();
-
             hashUpdates.put(symbol, String.valueOf(currentPrice));
 
             messagingTemplate.convertAndSend("/topic/price/" + symbol, currentPrice);

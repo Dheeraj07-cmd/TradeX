@@ -28,10 +28,7 @@ public class AdminController {
     // Approve or Reject the User
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/kyc-review/{userId}")
-    public ResponseEntity<User> reviewKyc(
-            @PathVariable String userId,
-            @RequestParam KycStatus status,
-            @RequestParam(required = false) String remarks) {
+    public ResponseEntity<User> reviewKyc(@PathVariable String userId, @RequestParam KycStatus status, @RequestParam(required = false) String remarks) {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));

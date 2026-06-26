@@ -130,7 +130,13 @@ public class DatabaseSeeder implements CommandLineRunner {
         java.util.LinkedList<Candle> data = new java.util.LinkedList<>();
         ThreadLocalRandom localRandom = ThreadLocalRandom.current();
 
-        long currentTime = System.currentTimeMillis() / 1000;
+        long nowUnix = System.currentTimeMillis() / 1000;
+        long istOffset = 19800;
+        long adjustedNow = nowUnix + istOffset;
+
+        // Force starting point to align perfectly with the bracket step
+        long alignedBaseTime = (adjustedNow - (adjustedNow % timeStep)) - istOffset;
+
         double walkClose = livePrice;
 
         for (int i = 0; i < numCandles; i++) {
@@ -146,7 +152,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             low = Math.round(low * 100.0) / 100.0;
             double close = Math.round(walkClose * 100.0) / 100.0;
 
-            long candleTime = currentTime - (i * timeStep);
+            long candleTime = alignedBaseTime - (i * timeStep);
 
             data.addFirst(new Candle(symbol, tf, candleTime, open, high, low, close));
             walkClose = open;

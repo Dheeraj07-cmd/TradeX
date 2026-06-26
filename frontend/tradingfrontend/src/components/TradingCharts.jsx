@@ -68,13 +68,16 @@ function TradingChart({ symbol, currentPrice }) {
                 let histData = res.data;
 
                 if (histData && histData.length > 0) {
-                    histData = histData.map(d => ({
+                    histData = histData
+                        .filter(d => d.time != null && d.close != null) // Drop nulls
+                        .map(d => ({
                         time: Number(d.time),
                         open: Number(d.open),
                         high: Number(d.high),
                         low: Number(d.low),
                         close: Number(d.close)
-                    }));
+                    }))
+                    .filter(d => !isNaN(d.time) && !isNaN(d.close));
 
                     histData.sort((a, b) => a.time - b.time);
 
@@ -114,6 +117,7 @@ function TradingChart({ symbol, currentPrice }) {
     }, [symbol, timeframe]);
 
     useEffect(() => {
+        if (!currentPrice || isNaN(currentPrice) || currentPrice <= 0) return;
         if (!seriesRef.current || !lastCandleRef.current || currentPrice === 0 || loading || !hasData) return;
 
         const lastCandle = lastCandleRef.current;

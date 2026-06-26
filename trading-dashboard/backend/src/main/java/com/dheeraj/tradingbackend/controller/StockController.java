@@ -37,9 +37,7 @@ public class StockController {
                 .searchStocks(symbol)
                 .stream()
                 .findFirst()
-                .orElseThrow(() ->
-                        new RuntimeException("Stock not found")
-                );
+                .orElseThrow(() -> new RuntimeException("Stock not found"));
 
         applyLivePrice(stock);
 
@@ -54,14 +52,11 @@ public class StockController {
     }
 
     private void applyLivePrice(Stock stock) {
-        String redisKey = "live_price:" + stock.getSymbol();
-        String livePrice = redisTemplate
-                .opsForValue()
-                .get(redisKey);
+        Object livePriceObj = redisTemplate.opsForHash().get("live_prices", stock.getSymbol());
 
-        if (livePrice != null) {
+        if (livePriceObj != null) {
             try {
-                stock.setCurrentPrice(Double.parseDouble(livePrice));
+                stock.setCurrentPrice(Double.parseDouble(livePriceObj.toString()));
             } catch (Exception ignored) {}
         }
     }

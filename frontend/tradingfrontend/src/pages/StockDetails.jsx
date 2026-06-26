@@ -25,7 +25,6 @@ function StockDetails() {
     const [stockInfo, setStockInfo] = useState(null);
     const [depthData, setDepthData] = useState(null);
 
-    // Tab states for the dropdown
     const [availableTabs, setAvailableTabs] = useState(["Watchlist 1"]);
     const [selectedTab, setSelectedTab] = useState("Watchlist 1");
 
@@ -65,13 +64,11 @@ function StockDetails() {
             }
         };
 
-        // Fetch the user's available tabs
         const fetchUserTabs = async () => {
             try {
                 const res = await API.get("/api/watchlist/tabs");
                 let dbTabs = res.data || [];
 
-                // Take any empty tabs from local storage
                 const localTabs = JSON.parse(localStorage.getItem("userTabs")) || [];
                 const mergedTabs = [...new Set([...dbTabs, ...localTabs])];
 
@@ -85,8 +82,17 @@ function StockDetails() {
         fetchInitialPrices();
         fetchUserTabs();
 
+
+        const token = localStorage.getItem("token") || localStorage.getItem("jwt");
+        if (!token || token === "null") return;
+
+        const wsUrl = import.meta.env.VITE_API_URL.replace("http", "ws");
         const client = new Client({
-            brokerURL: `${import.meta.env.VITE_API_URL.replace("http", "ws")}/ws`,
+            brokerURL: `${wsUrl}/ws`,
+
+            connectHeaders: {
+                Authorization: `Bearer ${token}`
+            },
             reconnectDelay: 5000,
             onConnect: () => {
                 console.log("Connected to Live Market Stream!");
@@ -95,7 +101,6 @@ function StockDetails() {
                     setPrice(parseFloat(message.body));
                 });
 
-                // Subscribe directly to the high-fidelity order book stream
                 client.subscribe(`/topic/depth/${symbol}`, (message) => {
                     setDepthData(JSON.parse(message.body));
                 });
@@ -105,6 +110,9 @@ function StockDetails() {
                         setComparePrice(parseFloat(message.body));
                     });
                 }
+            },
+            onStompError: (frame) => {
+                console.error("Broker reported error: " + frame.headers['message']);
             }
         });
 

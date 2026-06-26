@@ -31,7 +31,6 @@ function MarketFeed() {
                         topLosers: result.topLosers,
                         trendingStocks: result.trendingStocks,
                         buySellPressure: result.buySellPressure
-                        // Notice we DO NOT overwrite prev.latestNews or sentimentLeaderboard here
                     };
                 });
             } catch (error) {
@@ -43,9 +42,14 @@ function MarketFeed() {
 
         fetchInitialState();
 
+        if (!token || token === "null") return;
+
         const wsUrl = apiUrl.startsWith("https") ? apiUrl.replace("https", "wss") : apiUrl.replace("http", "ws");
         const client = new Client({
             brokerURL: `${wsUrl}/ws`,
+            connectHeaders: {
+                Authorization: `Bearer ${token}`
+            },
             reconnectDelay: 5000,
             onConnect: () => {
                 client.subscribe("/topic/globalNews", (message) => {

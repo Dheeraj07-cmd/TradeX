@@ -18,13 +18,11 @@ public class NewsController {
 
     @GetMapping("/{symbol}")
     public List<NewsArticle> getLatestNewsForSymbol(@PathVariable String symbol) {
-        // Fetch 5 recent AI articles for the specific stock
         return newsRepository.findTop5BySymbolOrderByTimestampDesc(symbol);
     }
 
     @GetMapping("/global")
     public List<NewsArticle> getGlobalMarketNews() {
-        // Fetch top 20 recent articles across the entire market
         return newsRepository.findTop20ByOrderByTimestampDesc();
     }
 }
