@@ -65,9 +65,7 @@ function LiveNews({ symbol }) {
         fetchHistoricalNews();
 
         // Live WebSocket Connection for background updates
-        const wsUrl = apiUrl.startsWith("https")
-            ? apiUrl.replace("https", "wss")
-            : apiUrl.replace("http", "ws");
+        const wsUrl = apiUrl.startsWith("https") ? apiUrl.replace("https", "wss") : apiUrl.replace("http", "ws");
 
         const token = localStorage.getItem("token") || localStorage.getItem("jwt");
 

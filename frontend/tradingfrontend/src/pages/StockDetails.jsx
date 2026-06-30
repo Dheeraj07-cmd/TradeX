@@ -86,10 +86,11 @@ function StockDetails() {
         const token = localStorage.getItem("token") || localStorage.getItem("jwt");
         if (!token || token === "null") return;
 
-        const wsUrl = import.meta.env.VITE_API_URL.replace("http", "ws");
+        const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
+        const wsUrl = baseUrl.startsWith("https") ? baseUrl.replace("https", "wss") : baseUrl.replace("http", "ws");
+
         const client = new Client({
             brokerURL: `${wsUrl}/ws`,
-
             connectHeaders: {
                 Authorization: `Bearer ${token}`
             },

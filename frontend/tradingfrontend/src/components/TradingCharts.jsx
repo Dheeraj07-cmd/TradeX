@@ -69,7 +69,7 @@ function TradingChart({ symbol, currentPrice }) {
 
                 if (histData && histData.length > 0) {
                     histData = histData
-                        .filter(d => d.time != null && d.close != null) // Drop nulls
+                        .filter(d => d.time != null && d.close != null) 
                         .map(d => ({
                         time: Number(d.time),
                         open: Number(d.open),
