@@ -14,28 +14,19 @@ function Watchlist({ openOrderModal }) {
     const navigate = useNavigate();
 
     const stompClientRef = useRef(null);
-    const subscriptionsRef = useRef({});
 
-    // Fetch available tabs and merge with Local Storage
     const fetchTabs = async () => {
         try {
             const res = await API.get("/api/watchlist/tabs");
             let dbTabs = res.data || [];
-
             const localTabs = JSON.parse(localStorage.getItem("userTabs")) || [];
             const mergedTabs = [...new Set([...dbTabs, ...localTabs])];
-
             if (mergedTabs.length === 0) mergedTabs.push("Watchlist 1");
 
             setTabs(mergedTabs);
             localStorage.setItem("userTabs", JSON.stringify(mergedTabs));
-
-            if (!mergedTabs.includes(activeTab)) {
-                setActiveTab(mergedTabs[0]);
-            }
-        } catch (err) {
-            console.error("Failed to load tabs", err);
-        }
+            if (!mergedTabs.includes(activeTab)) setActiveTab(mergedTabs[0]);
+        } catch (err) { console.error("Failed to load tabs", err); }
     };
 
     useEffect(() => {
@@ -44,26 +35,20 @@ function Watchlist({ openOrderModal }) {
         return () => window.removeEventListener("watchlistUpdated", fetchTabs);
     }, []);
 
-    // Pass tabName to backend
     const fetchInitialWatchlist = async (tabName) => {
         try {
             const res = await API.get(`/api/watchlist?listName=${tabName}`);
-            // Backend provides item.basePrice
             setWatchlist(res.data);
             return res.data;
-        } catch (err) {
-            console.error("Failed to load watchlist", err);
-            return [];
-        }
+        } catch (err) { return []; }
     };
 
-    // WebSocket Connection
+    // Single Subscription
     useEffect(() => {
         let isMounted = true;
 
         const initializeLiveStream = async () => {
-            // Fetch only the stocks for the active tab
-            const initialList = await fetchInitialWatchlist(activeTab);
+            await fetchInitialWatchlist(activeTab);
             if (!isMounted) return;
 
             const token = localStorage.getItem("token") || localStorage.getItem("jwt");
@@ -74,36 +59,37 @@ function Watchlist({ openOrderModal }) {
 
             const client = new Client({
                 brokerURL: `${wsUrl}/ws`,
-                connectHeaders: {
-                    Authorization: `Bearer ${token}`
-                }, reconnectDelay: 5000,
+                connectHeaders: { Authorization: `Bearer ${token}` },
+                reconnectDelay: 5000,
                 onConnect: () => {
-                    initialList.forEach(stock => {
-                        const topic = `/topic/price/${stock.symbol}`;
-                        if (!subscriptionsRef.current[stock.symbol]) {
-                            const sub = client.subscribe(topic, (message) => {
-                                const newLivePrice = parseFloat(message.body);
+                    client.subscribe("/topic/market-prices", (message) => {
+                        if (!message.body) return;
+                        const livePrices = JSON.parse(message.body);
 
-                                setWatchlist(currentList =>
-                                    currentList.map(item => {
-                                        if (item.symbol === stock.symbol) {
-                                            const isUp = newLivePrice >= item.price;
-                                            const newChange = item.basePrice > 0 ? ((newLivePrice - item.basePrice) / item.basePrice) * 100 : 0;
-                                            const flashColor = isUp ? "rgba(40, 167, 69, 0.25)" : "rgba(220, 53, 69, 0.25)";
+                        setWatchlist(currentList => {
+                            let hasChanges = false;
+                            const newList = currentList.map(item => {
+                                if (livePrices[item.symbol]) {
+                                    const newLivePrice = parseFloat(livePrices[item.symbol]);
+                                    if (newLivePrice !== item.price) {
+                                        hasChanges = true;
+                                        const isUp = newLivePrice >= item.price;
+                                        const newChange = item.basePrice > 0 ? ((newLivePrice - item.basePrice) / item.basePrice) * 100 : 0;
+                                        const flashColor = isUp ? "rgba(40, 167, 69, 0.25)" : "rgba(220, 53, 69, 0.25)";
 
-                                            setTimeout(() => {
-                                                setWatchlist(list => list.map(s => s.symbol === stock.symbol ?
-                                                    { ...s, flashColor: "transparent" } : s));
-                                            }, 400);
+                                        setTimeout(() => {
+                                            if (isMounted) {
+                                                setWatchlist(list => list.map(s => s.symbol === item.symbol ? { ...s, flashColor: "transparent" } : s));
+                                            }
+                                        }, 400);
 
-                                            return { ...item, price: newLivePrice, changePercent: newChange, flashColor: flashColor };
-                                        }
-                                        return item;
-                                    })
-                                );
+                                        return { ...item, price: newLivePrice, changePercent: newChange, flashColor };
+                                    }
+                                }
+                                return item;
                             });
-                            subscriptionsRef.current[stock.symbol] = sub;
-                        }
+                            return hasChanges ? newList : currentList;
+                        });
                     });
                 }
             });
@@ -114,7 +100,6 @@ function Watchlist({ openOrderModal }) {
 
         if (stompClientRef.current) {
             stompClientRef.current.deactivate();
-            subscriptionsRef.current = {};
         }
 
         initializeLiveStream();
@@ -122,7 +107,6 @@ function Watchlist({ openOrderModal }) {
         const handleWatchlistUpdate = () => {
             if (stompClientRef.current) {
                 stompClientRef.current.deactivate();
-                subscriptionsRef.current = {};
             }
             fetchTabs();
             initializeLiveStream();
@@ -133,9 +117,7 @@ function Watchlist({ openOrderModal }) {
         return () => {
             isMounted = false;
             window.removeEventListener("watchlistUpdated", handleWatchlistUpdate);
-            if (stompClientRef.current) {
-                stompClientRef.current.deactivate();
-            }
+            if (stompClientRef.current) stompClientRef.current.deactivate();
         };
     }, [activeTab]);
 
@@ -149,29 +131,18 @@ function Watchlist({ openOrderModal }) {
         try {
             const res = await API.delete(`/api/watchlist/remove/${symbol}?listName=${activeTab}`);
             toast.success(res.data.message);
-
             setWatchlist(prev => prev.filter(s => s.symbol !== symbol));
-
-            if (subscriptionsRef.current[symbol]) {
-                subscriptionsRef.current[symbol].unsubscribe();
-                delete subscriptionsRef.current[symbol];
-            }
             fetchTabs();
-        } catch (err) {
-            toast.error("Failed to remove stock");
-        }
+        } catch (err) { toast.error("Failed to remove stock"); }
     };
 
     const createNewTab = () => {
         const newTabName = prompt("Enter a name for your new Watchlist:");
         if (newTabName && newTabName.trim() !== "") {
             const cleanName = newTabName.trim();
-
             if (!tabs.includes(cleanName)) {
                 const updatedTabs = [...tabs, cleanName];
                 setTabs(updatedTabs);
-
-                // Save empty tab to local storage
                 localStorage.setItem("userTabs", JSON.stringify(updatedTabs));
             }
             setActiveTab(cleanName);
@@ -186,13 +157,7 @@ function Watchlist({ openOrderModal }) {
     return (
         <div style={watchlistContainer}>
             <div style={searchHeader}>
-                <input
-                    type="text"
-                    placeholder="Search eg: TCS, INFY"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ ...ui.input, marginBottom: 0, border: "none", backgroundColor: "#2c2c2e" }}
-                />
+                <input type="text" placeholder="Search eg: TCS, INFY" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ ...ui.input, marginBottom: 0, border: "none", backgroundColor: "#2c2c2e" }} />
             </div>
 
             <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid #333", backgroundColor: "#151515" }}>
@@ -211,20 +176,17 @@ function Watchlist({ openOrderModal }) {
                         </button>
                     ))}
                 </div>
-                <button onClick={createNewTab} style={{ padding: "0 15px", backgroundColor: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>
+                <button onClick={createNewTab}
+                    style={{ padding: "0 15px", backgroundColor: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>
                     +
                 </button>
             </div>
 
             <div style={listContainer}>
                 {watchlist.length === 0 ? (
-                    <p style={{ textAlign: "center", color: "#666", padding: "20px" }}>
-                        "{activeTab}" is empty.<br /><br />Add stocks from the charts page!
-                    </p>
+                    <p style={{ textAlign: "center", color: "#666", padding: "20px" }}>"{activeTab}" is empty.<br /><br />Add stocks from the charts page!</p>
                 ) : filteredWatchlist.length === 0 ? (
-                    <p style={{ textAlign: "center", color: "#888", padding: "20px" }}>
-                        No stocks match "{searchQuery}"
-                    </p>
+                    <p style={{ textAlign: "center", color: "#888", padding: "20px" }}>No stocks match "{searchQuery}"</p>
                 ) : (
                     filteredWatchlist.map((stock) => (
                         <div key={stock.symbol}
@@ -238,12 +200,8 @@ function Watchlist({ openOrderModal }) {
                             onClick={() => navigate(`/stock/${stock.symbol}`)}
                         >
                             <div style={{ display: "flex", flexDirection: "column" }}>
-                                <span style={{ color: (stock.changePercent || 0) >= 0 ? "#28a745" : "#dc3545", fontSize: "14px", fontWeight: "600" }}>
-                                    {stock.symbol}
-                                </span>
-                                <span style={{ fontSize: "10px", color: "#666", display: "block", marginTop: "2px" }}>
-                                    {stock.companyName || "NSE"}
-                                </span>
+                                <span style={{ color: (stock.changePercent || 0) >= 0 ? "#28a745" : "#dc3545", fontSize: "14px", fontWeight: "600" }}>{stock.symbol}</span>
+                                <span style={{ fontSize: "10px", color: "#666", display: "block", marginTop: "2px" }}>{stock.companyName || "NSE"}</span>
                             </div>
 
                             {hoveredRow === stock.symbol ? (

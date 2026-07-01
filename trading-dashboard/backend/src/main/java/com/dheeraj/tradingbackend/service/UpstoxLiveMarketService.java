@@ -150,7 +150,7 @@ public class UpstoxLiveMarketService implements MarketDataProvider {
             hashUpdates.put(symbol, String.valueOf(currentPrice));
 
             messagingTemplate.convertAndSend("/topic/price/" + symbol, currentPrice);
-            generateAndBroadcastMockDepth(symbol, currentPrice);
+//            generateAndBroadcastMockDepth(symbol, currentPrice);
             hasUpdates = true;
         }
 
@@ -298,6 +298,18 @@ public class UpstoxLiveMarketService implements MarketDataProvider {
                 Object cachedPriceObj = redisTemplate.opsForHash().get("live_prices", symbol);double livePrice = (cachedPriceObj != null) ? Double.parseDouble(cachedPriceObj.toString()) : stock.getCurrentPrice();
                 candleRepository.save(new Candle(symbol, timeframe, currentTime, livePrice, livePrice, livePrice, livePrice));
             } catch (Exception ignored) {}
+        }
+    }
+
+    @Scheduled(fixedRate = 4000)
+    public void broadcastMarketDepth() {
+        if (livePriceCache.isEmpty()) return;
+
+        for (Map.Entry<String, Double> entry : livePriceCache.entrySet()) {
+            String symbol = instrumentToSymbol.get(entry.getKey());
+            if (symbol != null) {
+                generateAndBroadcastMockDepth(symbol, entry.getValue());
+            }
         }
     }
 }
