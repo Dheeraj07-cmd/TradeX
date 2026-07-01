@@ -135,7 +135,7 @@ public class UpstoxLiveMarketService implements MarketDataProvider {
         });
     }
 
-    @Scheduled(fixedRate = 3000)
+    @Scheduled(fixedRate = 2000)
     public void broadcastThrottledUpdates() {
         if (livePriceCache.isEmpty()) return;
         boolean hasUpdates = false;
@@ -156,9 +156,13 @@ public class UpstoxLiveMarketService implements MarketDataProvider {
 
         if (hasUpdates) {
             try {
+                // Save map block to Redis Hash
                 redisTemplate.opsForHash().putAll("live_prices", hashUpdates);
             } catch (Exception ignored) {}
 
+            messagingTemplate.convertAndSend("/topic/market-prices", hashUpdates);
+
+            // Keep message broker alive for background listeners
             messagingTemplate.convertAndSend("/topic/market-update", "tick");
         }
     }
@@ -226,9 +230,9 @@ public class UpstoxLiveMarketService implements MarketDataProvider {
         for (Stock stock : cachedStocks) {
             try {
                 String symbol = stock.getSymbol();
-                String cachedPriceStr = redisTemplate.opsForValue().get("live_price:" + symbol);
-                if (cachedPriceStr != null) {
-                    double livePrice = Double.parseDouble(cachedPriceStr);
+                Object cachedPriceObj = redisTemplate.opsForHash().get("live_prices", symbol);
+                if (cachedPriceObj != null) {
+                    double livePrice = Double.parseDouble(cachedPriceObj.toString());
                     updateLatestCandle(symbol, "5M", livePrice);
                     updateLatestCandle(symbol, "1H", livePrice);
                     updateLatestCandle(symbol, "1D", livePrice);
@@ -258,8 +262,7 @@ public class UpstoxLiveMarketService implements MarketDataProvider {
                         }
                         if (isModified) candleRepository.save(latest);
                     });
-        } catch (Exception ignored) {
-        }
+        } catch (Exception ignored) {}
     }
 
     @Scheduled(cron = "0 */5 * * * *") // Every 5 minutes
@@ -282,18 +285,17 @@ public class UpstoxLiveMarketService implements MarketDataProvider {
         createNewCandlesForTimeframe("1W");
     }
 
+
     private void createNewCandlesForTimeframe(String timeframe) {
         // Daily and Weekly candles only generate if market is open at exactly 15:30
         if (!isMarketOpen() && (timeframe.equals("1D") || timeframe.equals("1W"))) return;
-
         if (cachedStocks.isEmpty()) return;
 
         long currentTime = System.currentTimeMillis() / 1000;
         for (Stock stock : cachedStocks) {
             try {
                 String symbol = stock.getSymbol();
-                String cachedPriceStr = redisTemplate.opsForValue().get("live_price:" + symbol);
-                double livePrice = (cachedPriceStr != null) ? Double.parseDouble(cachedPriceStr) : stock.getCurrentPrice();
+                Object cachedPriceObj = redisTemplate.opsForHash().get("live_prices", symbol);double livePrice = (cachedPriceObj != null) ? Double.parseDouble(cachedPriceObj.toString()) : stock.getCurrentPrice();
                 candleRepository.save(new Candle(symbol, timeframe, currentTime, livePrice, livePrice, livePrice, livePrice));
             } catch (Exception ignored) {}
         }
