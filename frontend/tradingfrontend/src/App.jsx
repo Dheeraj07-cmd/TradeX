@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Outlet } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -11,8 +11,21 @@ import Layout from "./components/Layout";
 import MarketFeed from "./pages/MarketFeed";
 import Profile from "./pages/Profile";
 import AdminDashboard from "./pages/AdminDashboard";
+import { WebSocketProvider } from "./contexts/WebSocketContext";
 
 import "./App.css";
+
+// ✅ THE FIX: Create a Private wrapper that enforces the Layout and the WebSocket
+// This ensures the WebSocket only connects when the user is inside the main application.
+const PrivateLayout = () => {
+  return (
+    <WebSocketProvider>
+      <Layout>
+        <Outlet />
+      </Layout>
+    </WebSocketProvider>
+  );
+};
 
 function App() {
   return (
@@ -27,19 +40,23 @@ function App() {
           }
         }}
       />
-
+      
       <Routes>
+        {/* Public Routes - No WebSockets allowed here */}
         <Route path="/" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
 
-        <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
-        <Route path="/positions" element={<Layout><Positions /></Layout>} />
-        <Route path="/orders" element={<Layout><Orders /></Layout>} />
-        <Route path="/funds" element={<Layout><Funds /></Layout>} />
-        <Route path="/stock/:symbol" element={<Layout><StockDetails /></Layout>} />
-        <Route path="/market-feed" element={<Layout><MarketFeed /></Layout>} />
-        <Route path="/profile" element={<Layout><Profile /></Layout>} />
-        <Route path="/admin" element={<Layout><AdminDashboard /></Layout>} />
+        {/* Private Routes - The WebSocket connects seamlessly once inside */}
+        <Route element={<PrivateLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/positions" element={<Positions />} />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/funds" element={<Funds />} />
+          <Route path="/stock/:symbol" element={<StockDetails />} />
+          <Route path="/market-feed" element={<MarketFeed />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+        </Route>
       </Routes>
     </>
   );

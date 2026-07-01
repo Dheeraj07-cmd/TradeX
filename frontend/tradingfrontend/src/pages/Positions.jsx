@@ -1,53 +1,43 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
 import * as ui from "../styles/style";
-import { Client } from "@stomp/stompjs";
 import { formatCurrency } from "../utils/helpers";
+import { useWebSocket } from "../contexts/WebSocketContext";
 
 function Positions({ openOrderModal }) {
+  const { isConnected, subscribe } = useWebSocket(); // ✅ Use Global Socket
   const [positions, setPositions] = useState([]);
+  
   const totalInvested = positions.reduce((acc, p) => acc + (p.avg * p.qty), 0);
   const totalCurrent = positions.reduce((acc, p) => acc + (p.price * p.qty), 0);
   const totalPnl = totalCurrent - totalInvested;
   const totalPnlPercent = totalInvested > 0 ? ((totalPnl / totalInvested) * 100).toFixed(2) : 0;
 
+  const fetchPositions = async () => {
+    try {
+      const res = await API.get("/api/positions");
+      setPositions([...res.data]);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
-    const userId = localStorage.getItem("userId");
-
-    const fetchPositions = async () => {
-      try {
-        const res = await API.get("/api/positions");
-        setPositions([...res.data]);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
     fetchPositions();
+  }, []);
 
-    const token = localStorage.getItem("token") || localStorage.getItem("jwt");
+  useEffect(() => {
+    if (!isConnected) return;
 
-    const client = new Client({
-      brokerURL: `${import.meta.env.VITE_API_URL.replace("http", "ws")}/ws`,
-      connectHeaders: {
-        Authorization: `Bearer ${token}`
-      },
-      reconnectDelay: 5000,
-      onConnect: () => {
-        console.log("WebSocket Connected!");
-        client.subscribe(`/topic/market-update`, () => {
-          console.log("Positions Tick");
-          fetchPositions();
-        });
-      },
-      onStompError: (frame) => {
-        console.error('Broker reported error: ' + frame.headers['message']);
-      }
+    // Use global socket instead of new Client()
+    const sub = subscribe(`/topic/market-update`, () => {
+      fetchPositions();
     });
 
-    client.activate();
-    return () => { client.deactivate(); };
-  }, []);
+    return () => {
+      if (sub) sub.unsubscribe();
+    };
+  }, [isConnected]);
 
   return (
     <div style={ui.page}>

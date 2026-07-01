@@ -1,28 +1,25 @@
 import { useEffect, useState } from "react";
-import { Client } from "@stomp/stompjs";
 import * as ui from "../styles/style";
+import { useWebSocket } from "../contexts/WebSocketContext";
 
 function LiveNews({ symbol }) {
+    const { isConnected, subscribe } = useWebSocket(); // ✅ Use Global Socket
     const [news, setNews] = useState([]);
     const [sentiment, setSentiment] = useState({ score: 50, label: "NEUTRAL", color: "#888" });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
-
-        // Fetch Historical News on initial load
         const fetchHistoricalNews = async () => {
             setLoading(true);
             try {
+                const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
                 const token = localStorage.getItem("token") || localStorage.getItem("jwt");
                 const response = await fetch(`${apiUrl}/api/news/${symbol}`, {
                     method: "GET",
                     headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP Error: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
                 const data = await response.json();
 
                 if (data && data.length > 0) {
@@ -37,16 +34,12 @@ function LiveNews({ symbol }) {
                         color: badgeColor
                     });
 
-                    // Convert historical DB format to UI format
                     const historicalNews = data.map(article => ({
                         id: article.timestamp,
                         title: article.headline,
                         summary: article.summary,
                         source: "AI Market Analyst",
-                        time: new Date(article.timestamp).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit"
-                        }),
+                        time: new Date(article.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                         impact: article.sentimentLabel
                     }));
 
@@ -63,55 +56,40 @@ function LiveNews({ symbol }) {
         };
 
         fetchHistoricalNews();
+    }, [symbol]);
 
-        // Live WebSocket Connection for background updates
-        const wsUrl = apiUrl.startsWith("https") ? apiUrl.replace("https", "wss") : apiUrl.replace("http", "ws");
+    useEffect(() => {
+        if (!isConnected) return;
 
-        const token = localStorage.getItem("token") || localStorage.getItem("jwt");
+        const sub = subscribe(`/topic/news/${symbol}`, (message) => {
+            const article = JSON.parse(message.body);
 
-        const client = new Client({
-            brokerURL: `${wsUrl}/ws`,
-            connectHeaders: {
-                Authorization: `Bearer ${token}`
-            },
-            reconnectDelay: 5000,
-            onConnect: () => {
-                client.subscribe(`/topic/news/${symbol}`, (message) => {
-                    const article = JSON.parse(message.body);
+            let badgeColor = "#888";
+            if (article.sentimentScore > 60) badgeColor = ui.theme.success;
+            if (article.sentimentScore < 40) badgeColor = ui.theme.danger;
 
-                    // Color based on score from backend
-                    let badgeColor = "#888";
-                    if (article.sentimentScore > 60) badgeColor = ui.theme.success;
-                    if (article.sentimentScore < 40) badgeColor = ui.theme.danger;
+            setSentiment({
+                score: article.sentimentScore || 50,
+                label: article.sentimentLabel || "NEUTRAL",
+                color: badgeColor
+            });
 
-                    setSentiment({
-                        score: article.sentimentScore || 50,
-                        label: article.sentimentLabel || "NEUTRAL",
-                        color: badgeColor
-                    });
+            const structuralNewsItem = {
+                id: article.timestamp,
+                title: article.headline,
+                summary: article.summary,
+                source: "AI Market Analyst",
+                time: "Just Now",
+                impact: article.sentimentLabel
+            };
 
-                    // Format into UI's news list layout structure
-                    const structuralNewsItem = {
-                        id: article.timestamp,
-                        title: article.headline,
-                        summary: article.summary,
-                        source: "AI Market Analyst",
-                        time: "Just Now",
-                        impact: article.sentimentLabel
-                    };
-
-                    // Prepend new article to the top of feed and keep only top 5
-                    setNews((prevNews) => [structuralNewsItem, ...prevNews].slice(0, 5));
-                });
-            },
+            setNews((prevNews) => [structuralNewsItem, ...prevNews].slice(0, 5));
         });
 
-        client.activate();
-
         return () => {
-            client.deactivate();
+            if (sub) sub.unsubscribe();
         };
-    }, [symbol]);
+    }, [isConnected, symbol]);
 
     return (
         <div style={{ backgroundColor: "#1e1e1e", borderRadius: "8px", border: `1px solid ${ui.theme.border}`, padding: "20px", marginTop: "20px" }}>

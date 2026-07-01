@@ -12,8 +12,10 @@ function TradingChart({ symbol, currentPrice }) {
     const [timeframe, setTimeframe] = useState("1D");
     const [loading, setLoading] = useState(true);
     const [hasData, setHasData] = useState(true);
+    const isDisposed = useRef(false);
 
     useEffect(() => {
+        isDisposed.current = false;
         if (!chartContainerRef.current) return;
 
         if (chartRef.current) {
@@ -65,6 +67,10 @@ function TradingChart({ symbol, currentPrice }) {
                 
                 const apiResolution = resolutionMap[timeframe];
                 const res = await API.get(`/api/chart/${symbol}/${apiResolution}`);
+                
+                // ✅ CRITICAL GUARD: Stop execution if component unmounted during the API call
+                if (isDisposed.current) return;
+
                 let histData = res.data;
 
                 if (histData && histData.length > 0) {
@@ -88,35 +94,52 @@ function TradingChart({ symbol, currentPrice }) {
                         });
                     }
 
-                    candlestickSeries.setData(histData);
-                    lastCandleRef.current = histData[histData.length - 1];
-
-                    chart.timeScale().fitContent();
-                    setHasData(true);
+                    // ✅ Double check before setting data
+                    if (!isDisposed.current) {
+                         candlestickSeries.setData(histData);
+                         lastCandleRef.current = histData[histData.length - 1];
+                         chart.timeScale().fitContent();
+                         setHasData(true);
+                    }
+                   
                 } else {
-                    setHasData(false);
+                    if (!isDisposed.current) setHasData(false);
                 }
             } catch (err) {
                 console.error("Failed to load chart data", err);
-                setHasData(false);
+                if (!isDisposed.current) setHasData(false);
             } finally {
-                setLoading(false);
+                if (!isDisposed.current) setLoading(false);
             }
         };
 
         fetchChartData();
 
-        const handleResize = () => chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+        const handleResize = () => {
+             if (chartRef.current && chartContainerRef.current) {
+                 chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+             }
+        };
         window.addEventListener("resize", handleResize);
 
         return () => {
+            isDisposed.current = true; // Mark as dead immediately
             window.removeEventListener("resize", handleResize);
-            chart.remove();
+            
+            if (chartRef.current) {
+                try {
+                    chartRef.current.remove();
+                } catch(e) {
+                     // Catch any edge case where it's already removed
+                }
+            }
             chartRef.current = null;
+            seriesRef.current = null;
         };
     }, [symbol, timeframe]);
 
     useEffect(() => {
+        if (isDisposed.current) return;
         if (!currentPrice || isNaN(currentPrice) || currentPrice <= 0) return;
         if (!seriesRef.current || !lastCandleRef.current || currentPrice === 0 || loading || !hasData) return;
 
@@ -126,7 +149,6 @@ function TradingChart({ symbol, currentPrice }) {
         const intervalMap = { "1D": 300, "1W": 3600, "1M": 86400, "1Y": 604800 };
         const interval = intervalMap[timeframe];
 
-        // Apply +5:30 IST offset 
         const istOffset = 19800; 
         const adjustedNow = nowUnix + istOffset;
         
@@ -151,8 +173,15 @@ function TradingChart({ symbol, currentPrice }) {
             };
         }
 
-        seriesRef.current.update(updatedCandle);
-        lastCandleRef.current = updatedCandle;
+        try {
+            // ✅ One final safety check before updating the series
+            if (!isDisposed.current && seriesRef.current) {
+                seriesRef.current.update(updatedCandle);
+                lastCandleRef.current = updatedCandle;
+            }
+        } catch(e) {
+            console.warn("Chart update aborted: instance disposed.");
+        }
 
 
     }, [currentPrice, timeframe, loading, hasData]);

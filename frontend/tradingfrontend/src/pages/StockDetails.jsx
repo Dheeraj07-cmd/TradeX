@@ -6,18 +6,18 @@ import MarketDepth from "../components/MarketDepth";
 import LiveNews from "../components/LiveNews";
 import * as ui from "../styles/style";
 import toast from "react-hot-toast";
-import { Client } from "@stomp/stompjs";
 import API from "../services/api";
+import { useWebSocket } from "../contexts/WebSocketContext";
 
 function StockDetails() {
     const { symbol } = useParams();
     const navigate = useNavigate();
+    const { isConnected, subscribe } = useWebSocket(); // ✅ Use Global Socket
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [orderMode, setOrderMode] = useState("BUY");
 
     const [compareSymbol, setCompareSymbol] = useState("");
-
     const availableStocks = ["TCS", "RELIANCE", "HDFCBANK", "INFY", "SBIN"].filter(s => s !== symbol);
 
     const [price, setPrice] = useState(0);
@@ -35,7 +35,6 @@ function StockDetails() {
 
     const handleAddToWatchlist = async () => {
         try {
-            // Pass the selectedTab to the backend
             const res = await API.post(`/api/watchlist/add/${symbol}?listName=${selectedTab}`);
             toast.success(res.data.message);
             window.dispatchEvent(new Event("watchlistUpdated"));
@@ -44,8 +43,9 @@ function StockDetails() {
         }
     };
 
+    // 1. Initial Data Fetch
     useEffect(() => {
-        const fetchInitialPrices = async () => {
+        const fetchInitialData = async () => {
             try {
                 const res = await API.get(`/api/stocks/search?query=${symbol}`);
                 if (res.data && res.data.length > 0) {
@@ -59,67 +59,48 @@ function StockDetails() {
                         setComparePrice(compRes.data[0].currentPrice);
                     }
                 }
-            } catch (err) {
-                console.error("Failed to fetch initial prices", err);
-            }
-        };
 
-        const fetchUserTabs = async () => {
-            try {
-                const res = await API.get("/api/watchlist/tabs");
-                let dbTabs = res.data || [];
-
+                const tabsRes = await API.get("/api/watchlist/tabs");
+                let dbTabs = tabsRes.data || [];
                 const localTabs = JSON.parse(localStorage.getItem("userTabs")) || [];
                 const mergedTabs = [...new Set([...dbTabs, ...localTabs])];
-
                 if (mergedTabs.length > 0) {
                     setAvailableTabs(mergedTabs);
                     setSelectedTab(mergedTabs[0]);
                 }
-            } catch (err) { console.error(err); }
+            } catch (err) {
+                console.error("Fetch error", err);
+            }
         };
 
-        fetchInitialPrices();
-        fetchUserTabs();
+        fetchInitialData();
+    }, [symbol, compareSymbol]);
 
+    // 2. Global WebSocket Subscriptions
+    useEffect(() => {
+        if (!isConnected) return;
 
-        const token = localStorage.getItem("token") || localStorage.getItem("jwt");
-        if (!token || token === "null") return;
-
-        const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
-        const wsUrl = baseUrl.startsWith("https") ? baseUrl.replace("https", "wss") : baseUrl.replace("http", "ws");
-
-        const client = new Client({
-            brokerURL: `${wsUrl}/ws`,
-            connectHeaders: {
-                Authorization: `Bearer ${token}`
-            },
-            reconnectDelay: 5000,
-            onConnect: () => {
-                console.log("Connected to Live Market Stream!");
-
-                client.subscribe(`/topic/price/${symbol}`, (message) => {
-                    setPrice(parseFloat(message.body));
-                });
-
-                client.subscribe(`/topic/depth/${symbol}`, (message) => {
-                    setDepthData(JSON.parse(message.body));
-                });
-
-                if (compareSymbol) {
-                    client.subscribe(`/topic/price/${compareSymbol}`, (message) => {
-                        setComparePrice(parseFloat(message.body));
-                    });
-                }
-            },
-            onStompError: (frame) => {
-                console.error("Broker reported error: " + frame.headers['message']);
-            }
+        const priceSub = subscribe(`/topic/price/${symbol}`, (msg) => {
+            setPrice(parseFloat(msg.body));
         });
 
-        client.activate();
-        return () => client.deactivate();
-    }, [symbol, compareSymbol]);
+        const depthSub = subscribe(`/topic/depth/${symbol}`, (msg) => {
+            setDepthData(JSON.parse(msg.body));
+        });
+
+        let compareSub = null;
+        if (compareSymbol) {
+            compareSub = subscribe(`/topic/price/${compareSymbol}`, (msg) => {
+                setComparePrice(parseFloat(msg.body));
+            });
+        }
+
+        return () => {
+            if (priceSub) priceSub.unsubscribe();
+            if (depthSub) depthSub.unsubscribe();
+            if (compareSub) compareSub.unsubscribe();
+        };
+    }, [isConnected, symbol, compareSymbol]);
 
     return (
         <div style={{ padding: "20px 40px", color: ui.theme.textMain }}>

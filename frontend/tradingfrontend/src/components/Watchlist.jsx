@@ -1,19 +1,18 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import API from "../services/api";
 import * as ui from "../styles/style";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Client } from "@stomp/stompjs";
+import { useWebSocket } from "../contexts/WebSocketContext";
 
 function Watchlist({ openOrderModal }) {
+    const { isConnected, subscribe } = useWebSocket(); // ✅ Use Global Socket
     const [watchlist, setWatchlist] = useState([]);
     const [tabs, setTabs] = useState(["Watchlist 1"]);
     const [activeTab, setActiveTab] = useState("Watchlist 1");
     const [hoveredRow, setHoveredRow] = useState(null);
     const [searchQuery, setSearchQuery] = useState("");
     const navigate = useNavigate();
-
-    const stompClientRef = useRef(null);
 
     const fetchTabs = async () => {
         try {
@@ -35,91 +34,60 @@ function Watchlist({ openOrderModal }) {
         return () => window.removeEventListener("watchlistUpdated", fetchTabs);
     }, []);
 
-    const fetchInitialWatchlist = async (tabName) => {
-        try {
-            const res = await API.get(`/api/watchlist?listName=${tabName}`);
-            setWatchlist(res.data);
-            return res.data;
-        } catch (err) { return []; }
-    };
-
-    // Single Subscription
+    // Initial Fetch & WebSocket Setup
     useEffect(() => {
         let isMounted = true;
+        let sub = null;
 
-        const initializeLiveStream = async () => {
-            await fetchInitialWatchlist(activeTab);
-            if (!isMounted) return;
-
-            const token = localStorage.getItem("token") || localStorage.getItem("jwt");
-            if (!token || token === "null") return;
-
-            const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
-            const wsUrl = baseUrl.startsWith("https") ? baseUrl.replace("https", "wss") : baseUrl.replace("http", "ws");
-
-            const client = new Client({
-                brokerURL: `${wsUrl}/ws`,
-                connectHeaders: { Authorization: `Bearer ${token}` },
-                reconnectDelay: 5000,
-                onConnect: () => {
-                    client.subscribe("/topic/market-prices", (message) => {
-                        if (!message.body) return;
-                        const livePrices = JSON.parse(message.body);
-
-                        setWatchlist(currentList => {
-                            let hasChanges = false;
-                            const newList = currentList.map(item => {
-                                if (livePrices[item.symbol]) {
-                                    const newLivePrice = parseFloat(livePrices[item.symbol]);
-                                    if (newLivePrice !== item.price) {
-                                        hasChanges = true;
-                                        const isUp = newLivePrice >= item.price;
-                                        const newChange = item.basePrice > 0 ? ((newLivePrice - item.basePrice) / item.basePrice) * 100 : 0;
-                                        const flashColor = isUp ? "rgba(40, 167, 69, 0.25)" : "rgba(220, 53, 69, 0.25)";
-
-                                        setTimeout(() => {
-                                            if (isMounted) {
-                                                setWatchlist(list => list.map(s => s.symbol === item.symbol ? { ...s, flashColor: "transparent" } : s));
-                                            }
-                                        }, 400);
-
-                                        return { ...item, price: newLivePrice, changePercent: newChange, flashColor };
-                                    }
-                                }
-                                return item;
-                            });
-                            return hasChanges ? newList : currentList;
-                        });
-                    });
-                }
-            });
-
-            stompClientRef.current = client;
-            client.activate();
-        };
-
-        if (stompClientRef.current) {
-            stompClientRef.current.deactivate();
-        }
-
-        initializeLiveStream();
-
-        const handleWatchlistUpdate = () => {
-            if (stompClientRef.current) {
-                stompClientRef.current.deactivate();
+        const setupWatchlist = async () => {
+            try {
+                const res = await API.get(`/api/watchlist?listName=${activeTab}`);
+                if (isMounted) setWatchlist(res.data);
+            } catch (err) {
+                if (isMounted) setWatchlist([]);
             }
-            fetchTabs();
-            initializeLiveStream();
+
+            if (isConnected) {
+                // Safely subscribe using the global hook
+                sub = subscribe("/topic/market-prices", (message) => {
+                    if (!message.body) return;
+                    const livePrices = JSON.parse(message.body);
+
+                    setWatchlist(currentList => {
+                        let hasChanges = false;
+                        const newList = currentList.map(item => {
+                            if (livePrices[item.symbol]) {
+                                const newLivePrice = parseFloat(livePrices[item.symbol]);
+                                if (newLivePrice !== item.price) {
+                                    hasChanges = true;
+                                    const isUp = newLivePrice >= item.price;
+                                    const newChange = item.basePrice > 0 ? ((newLivePrice - item.basePrice) / item.basePrice) * 100 : 0;
+                                    const flashColor = isUp ? "rgba(40, 167, 69, 0.25)" : "rgba(220, 53, 69, 0.25)";
+
+                                    setTimeout(() => {
+                                        if (isMounted) {
+                                            setWatchlist(list => list.map(s => s.symbol === item.symbol ? { ...s, flashColor: "transparent" } : s));
+                                        }
+                                    }, 400);
+
+                                    return { ...item, price: newLivePrice, changePercent: newChange, flashColor };
+                                }
+                            }
+                            return item;
+                        });
+                        return hasChanges ? newList : currentList;
+                    });
+                });
+            }
         };
 
-        window.addEventListener("watchlistUpdated", handleWatchlistUpdate);
+        setupWatchlist();
 
         return () => {
             isMounted = false;
-            window.removeEventListener("watchlistUpdated", handleWatchlistUpdate);
-            if (stompClientRef.current) stompClientRef.current.deactivate();
+            if (sub) sub.unsubscribe();
         };
-    }, [activeTab]);
+    }, [activeTab, isConnected]);
 
     const handleTrade = (e, instrument, mode) => {
         e.stopPropagation();
@@ -176,10 +144,7 @@ function Watchlist({ openOrderModal }) {
                         </button>
                     ))}
                 </div>
-                <button onClick={createNewTab}
-                    style={{ padding: "0 15px", backgroundColor: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>
-                    +
-                </button>
+                <button onClick={createNewTab} style={{ padding: "0 15px", backgroundColor: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>+</button>
             </div>
 
             <div style={listContainer}>

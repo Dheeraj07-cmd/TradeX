@@ -4,7 +4,7 @@ import Charts from "../components/Charts";
 import * as ui from "../styles/style";
 import { formatCurrency } from "../utils/helpers";
 import KycProgressBanner from "../components/KycProgressBanner";
-import { Client } from "@stomp/stompjs";
+import { useWebSocket } from "../contexts/WebSocketContext";
 
 const SummaryCard = ({ title, value }) => (
     <div style={{ ...ui.card, ...ui.flexItem, borderTop: "3px solid #333" }}>
@@ -14,24 +14,21 @@ const SummaryCard = ({ title, value }) => (
 );
 
 function Dashboard() {
+    const { isConnected, subscribe } = useWebSocket(); // ✅ Use Global Socket
     const [holdings, setHoldings] = useState([]);
     const [realizedPnl, setRealizedPnl] = useState(0);
     const [unrealizedPnl, setUnrealizedPnl] = useState(0);
     const [profile, setProfile] = useState(null);
 
-    // Dynamically calculate live P&L
     const investedValue = holdings.reduce((sum, h) => sum + (Number(h.avg || 0) * Number(h.qty || 0)), 0);
     const currentValue = holdings.reduce((sum, h) => sum + (Number(h.price || 0) * Number(h.qty || 0)), 0);
     const totalPnl = currentValue - investedValue;
     const totalPnlPercent = investedValue > 0 ? ((totalPnl / investedValue) * 100).toFixed(2) : 0;
 
+    // 1. Initial REST API Fetch
     useEffect(() => {
-        let stompClient = null;
-        const token = localStorage.getItem("token") || localStorage.getItem("jwt");
-
-        const initializeDashboard = async () => {
+        const fetchDashboardData = async () => {
             try {
-                // Fetch all dashboard metrics 
                 const [holdingsRes, realizedRes, unrealizedRes, profileRes] = await Promise.all([
                     API.get("/api/holdings"),
                     API.get("/api/orders/pnl"),
@@ -43,64 +40,46 @@ function Dashboard() {
                 setRealizedPnl(realizedRes.data);
                 setUnrealizedPnl(unrealizedRes.data);
                 setProfile(profileRes.data);
-
-                if (!token || token === "null") return;
-
-                const userId = profileRes.data?.id;
-                const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
-                const wsUrl = baseUrl.startsWith("https") ? baseUrl.replace("https", "wss") : baseUrl.replace("http", "ws");
-
-                stompClient = new Client({
-                    brokerURL: `${wsUrl}/ws`,
-                    connectHeaders: {
-                        Authorization: `Bearer ${token}`
-                    },
-                    reconnectDelay: 5000,
-                    onConnect: () => {
-                        console.log("Secure WebSocket Connected!");
-
-                        // Listen for global market ticks
-                        stompClient.subscribe("/topic/market-prices", (message) => {
-                            if (message.body) {
-                                const livePrices = JSON.parse(message.body); // { "TCS": "3800", "RELIANCE": "2500" }
-
-                                // Instantly update the prices of the holdings in memory
-                                setHoldings(prevHoldings => prevHoldings.map(holding => {
-                                    // holding.name contains stock symbol (TCS, Reliance)
-                                    if (livePrices[holding.name]) {
-                                        return { ...holding, price: parseFloat(livePrices[holding.name]) };
-                                    }
-                                    return holding;
-                                }));
-                            }
-                        });
-
-                        if (userId) {
-                            stompClient.subscribe(`/topic/holdings/${userId}`, (message) => {
-                                if (message.body) {
-                                    const updatedHoldings = JSON.parse(message.body);
-                                    setHoldings(updatedHoldings);
-                                }
-                            });
-                        }
-                    },
-                    onStompError: (frame) => {
-                        console.error('Broker reported error: ' + frame.headers['message']);
-                    }
-                });
-                stompClient.activate();
             } catch (err) {
                 console.error("Dashboard initialization error:", err);
             }
         };
-        initializeDashboard();
-
-        return () => {
-            if (stompClient) {
-                stompClient.deactivate();
-            }
-        };
+        fetchDashboardData();
     }, []);
+
+    // 2. Live WebSocket Subscriptions
+    useEffect(() => {
+        if (!isConnected) return; // Wait until global socket is ready
+
+        // Subscribe to Global Market Prices
+        const priceSub = subscribe("/topic/market-prices", (message) => {
+            if (!message.body) return;
+            const livePrices = JSON.parse(message.body);
+
+            setHoldings(prevHoldings => prevHoldings.map(holding => {
+                if (livePrices[holding.name]) {
+                    return { ...holding, price: parseFloat(livePrices[holding.name]) };
+                }
+                return holding;
+            }));
+        });
+
+        let holdingsSub = null;
+        if (profile?.id) {
+            // Subscribe to Private User Holdings
+            holdingsSub = subscribe(`/topic/holdings/${profile.id}`, (message) => {
+                if (message.body) {
+                    setHoldings(JSON.parse(message.body));
+                }
+            });
+        }
+
+        // Cleanup subscriptions on unmount
+        return () => {
+            if (priceSub) priceSub.unsubscribe();
+            if (holdingsSub) holdingsSub.unsubscribe();
+        };
+    }, [isConnected, profile?.id]); // Re-run if connection drops/reconnects or profile loads
 
     const username = localStorage.getItem("username") || "User";
 
