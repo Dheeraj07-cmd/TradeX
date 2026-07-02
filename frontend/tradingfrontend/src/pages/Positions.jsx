@@ -13,24 +13,41 @@ function Positions({ openOrderModal }) {
     const totalPnl = totalCurrent - totalInvested;
     const totalPnlPercent = totalInvested > 0 ? ((totalPnl / totalInvested) * 100).toFixed(2) : 0;
 
-    const fetchPositions = async () => {
-        try {
-            const res = await API.get("/api/positions");
-            setPositions([...res.data]);
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
+    // 1. Fetch positions exactly ONE time when the page loads
     useEffect(() => {
+        const fetchPositions = async () => {
+            try {
+                const res = await API.get("/api/positions");
+                setPositions([...res.data]);
+            } catch (err) {
+                console.error(err);
+            }
+        };
         fetchPositions();
     }, []);
 
+    // 2. Update prices purely in browser memory using the global WebSocket
     useEffect(() => {
         if (!isConnected) return;
 
-        const sub = subscribe(`/topic/market-update`, () => {
-            fetchPositions();
+        const sub = subscribe("/topic/market-prices", (message) => {
+            if (!message.body) return;
+            const livePrices = JSON.parse(message.body);
+
+            setPositions(prev => {
+                let hasChanges = false;
+                const newPositions = prev.map(p => {
+                    if (livePrices[p.name]) {
+                        const newPrice = parseFloat(livePrices[p.name]);
+                        if (newPrice !== p.price) {
+                            hasChanges = true;
+                            return { ...p, price: newPrice };
+                        }
+                    }
+                    return p;
+                });
+                return hasChanges ? newPositions : prev;
+            });
         });
 
         return () => {

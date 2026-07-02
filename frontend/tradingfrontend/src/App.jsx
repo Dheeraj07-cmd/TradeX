@@ -1,4 +1,4 @@
-import { Routes, Route, Outlet } from "react-router-dom";
+import { Routes, Route, Outlet, Navigate } from "react-router-dom"; // Add Navigate
 import { Toaster } from "react-hot-toast";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -15,9 +15,14 @@ import { WebSocketProvider } from "./contexts/WebSocketContext";
 
 import "./App.css";
 
-// ✅ THE FIX: Create a Private wrapper that enforces the Layout and the WebSocket
-// This ensures the WebSocket only connects when the user is inside the main application.
 const PrivateLayout = () => {
+  const token = localStorage.getItem("token") || localStorage.getItem("jwt");
+
+  // ✅ AUTH GUARD: If there is no token, boot them instantly to the login page
+  if (!token || token === "null") {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <WebSocketProvider>
       <Layout>
@@ -42,11 +47,9 @@ function App() {
       />
       
       <Routes>
-        {/* Public Routes - No WebSockets allowed here */}
         <Route path="/" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
 
-        {/* Private Routes - The WebSocket connects seamlessly once inside */}
         <Route element={<PrivateLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/positions" element={<Positions />} />
@@ -63,3 +66,5 @@ function App() {
 }
 
 export default App;
+
+

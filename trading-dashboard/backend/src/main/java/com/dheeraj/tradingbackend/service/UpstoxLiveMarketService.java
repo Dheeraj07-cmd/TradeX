@@ -137,7 +137,12 @@ public class UpstoxLiveMarketService implements MarketDataProvider {
 
     @Scheduled(fixedRate = 2000)
     public void broadcastThrottledUpdates() {
-        if (livePriceCache.isEmpty()) return;
+        System.out.println("Cache size = " + livePriceCache.size());
+        if (livePriceCache.isEmpty()){
+            System.out.println("EMPTY CACHE");
+            return;
+        }
+        System.out.println("Publishing " + livePriceCache.size() + " prices");
         boolean hasUpdates = false;
 
         Map<String, String> hashUpdates = new HashMap<>();

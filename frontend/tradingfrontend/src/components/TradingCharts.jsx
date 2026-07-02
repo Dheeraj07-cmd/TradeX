@@ -19,7 +19,7 @@ function TradingChart({ symbol, currentPrice }) {
         if (!chartContainerRef.current) return;
 
         if (chartRef.current) {
-            chartRef.current.remove();
+            try { chartRef.current.remove(); } catch(e) {}
         }
 
         const chart = createChart(chartContainerRef.current, {
@@ -58,16 +58,12 @@ function TradingChart({ symbol, currentPrice }) {
             setLoading(true);
             setHasData(true);
             try {
-                const resolutionMap = {
-                    "1D": "5M",
-                    "1W": "1H",
-                    "1M": "1D",
-                    "1Y": "1W" 
-                };
+                const resolutionMap = { "1D": "5M", "1W": "1H", "1M": "1D", "1Y": "1W" };
                 
                 const apiResolution = resolutionMap[timeframe];
                 const res = await API.get(`/api/chart/${symbol}/${apiResolution}`);
                 
+                // 🛑 If user clicked away during fetch, abort immediately!
                 if (isDisposed.current) return;
 
                 let histData = res.data;
@@ -93,13 +89,17 @@ function TradingChart({ symbol, currentPrice }) {
                         });
                     }
 
-                    if (!isDisposed.current) {
-                         candlestickSeries.setData(histData);
-                         lastCandleRef.current = histData[histData.length - 1];
-                         chart.timeScale().fitContent();
-                         setHasData(true);
+                    // ✅ Use safe refs and wrap in Try/Catch to prevent "Object disposed"
+                    if (!isDisposed.current && seriesRef.current && chartRef.current) {
+                        try {
+                            seriesRef.current.setData(histData);
+                            lastCandleRef.current = histData[histData.length - 1];
+                            chartRef.current.timeScale().fitContent();
+                            setHasData(true);
+                        } catch (e) {
+                            console.warn("setData aborted: chart unmounted.");
+                        }
                     }
-                   
                 } else {
                     if (!isDisposed.current) setHasData(false);
                 }
@@ -114,21 +114,22 @@ function TradingChart({ symbol, currentPrice }) {
         fetchChartData();
 
         const handleResize = () => {
-             if (chartRef.current && chartContainerRef.current) {
-                 chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+             if (chartRef.current && chartContainerRef.current && !isDisposed.current) {
+                 try {
+                     chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+                 } catch(e) {}
              }
         };
         window.addEventListener("resize", handleResize);
 
         return () => {
-            isDisposed.current = true; // Mark as dead immediately
+            isDisposed.current = true;
             window.removeEventListener("resize", handleResize);
             
             if (chartRef.current) {
                 try {
                     chartRef.current.remove();
-                } catch(e) {
-                }
+                } catch(e) {}
             }
             chartRef.current = null;
             seriesRef.current = null;
@@ -148,7 +149,6 @@ function TradingChart({ symbol, currentPrice }) {
 
         const istOffset = 19800; 
         const adjustedNow = nowUnix + istOffset;
-        
         const currentBracket = (adjustedNow - (adjustedNow % interval)) - istOffset;
 
         let updatedCandle;
@@ -178,7 +178,6 @@ function TradingChart({ symbol, currentPrice }) {
         } catch(e) {
             console.warn("Chart update aborted: instance disposed.");
         }
-
 
     }, [currentPrice, timeframe, loading, hasData]);
 
