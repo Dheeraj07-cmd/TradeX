@@ -12,7 +12,7 @@ import { useWebSocket } from "../contexts/WebSocketContext";
 function StockDetails() {
     const { symbol } = useParams();
     const navigate = useNavigate();
-    const { isConnected, subscribe } = useWebSocket(); // ✅ Use Global Socket
+    const { isConnected, subscribe } = useWebSocket();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [orderMode, setOrderMode] = useState("BUY");
@@ -43,7 +43,6 @@ function StockDetails() {
         }
     };
 
-    // 1. Initial Data Fetch
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
@@ -76,7 +75,6 @@ function StockDetails() {
         fetchInitialData();
     }, [symbol, compareSymbol]);
 
-    // 2. Global WebSocket Subscriptions
     useEffect(() => {
         if (!isConnected) return;
 
@@ -134,7 +132,6 @@ function StockDetails() {
                         ))}
                     </select>
 
-                    {/* Watchlist dropdown and add */}
                     <div style={{ display: "flex", border: `1px solid ${ui.theme.border}`, borderRadius: "4px", overflow: "hidden" }}>
                         <select
                             value={selectedTab}

@@ -1,87 +1,80 @@
-import React, { useEffect, useState, useRef } from "react";
-import { Client } from "@stomp/stompjs";
+import { useEffect, useState, useRef } from "react";
 import * as ui from "../styles/style";
+import { useWebSocket } from "../contexts/WebSocketContext";
 
 function MarketFeed() {
+    const { isConnected, subscribe } = useWebSocket();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [showAllStocks, setShowAllStocks] = useState(false);
     const refreshTimeoutRef = useRef(null);
 
+    const fetchInitialState = async () => {
+        try {
+            const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
+            const token = localStorage.getItem("token") || localStorage.getItem("jwt");
+            const response = await fetch(`${apiUrl}/api/market-feed/overview`, {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error("Unauthorized or server down");
+            const result = await response.json();
+
+            setData(prev => {
+                if (!prev) return result;
+                return {
+                    ...prev,
+                    allStocks: result.allStocks,
+                    sectorHeatmap: result.sectorHeatmap,
+                    topGainers: result.topGainers,
+                    topLosers: result.topLosers,
+                    trendingStocks: result.trendingStocks,
+                    buySellPressure: result.buySellPressure
+                };
+            });
+        } catch (error) {
+            console.error("Failed gathering terminal snapshot", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
-        const token = localStorage.getItem("token") || localStorage.getItem("jwt");
-
-        const fetchInitialState = async () => {
-            try {
-                const response = await fetch(`${apiUrl}/api/market-feed/overview`, {
-                    headers: { "Authorization": `Bearer ${token}` }
-                });
-                if (!response.ok) throw new Error("Unauthorized or server down");
-                const result = await response.json();
-
-                // Merge safely so News/Macro text doesn't flicker unnecessarily
-                setData(prev => {
-                    if (!prev) return result;
-                    return {
-                        ...prev,
-                        allStocks: result.allStocks,
-                        sectorHeatmap: result.sectorHeatmap,
-                        topGainers: result.topGainers,
-                        topLosers: result.topLosers,
-                        trendingStocks: result.trendingStocks,
-                        buySellPressure: result.buySellPressure
-                    };
-                });
-            } catch (error) {
-                console.error("Failed gathering terminal snapshot", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchInitialState();
+    }, []);
 
-        if (!token || token === "null") return;
+    useEffect(() => {
+        if (!isConnected) return;
 
-        const wsUrl = apiUrl.startsWith("https") ? apiUrl.replace("https", "wss") : apiUrl.replace("http", "ws");
-        const client = new Client({
-            brokerURL: `${wsUrl}/ws`,
-            connectHeaders: {
-                Authorization: `Bearer ${token}`
-            },
-            reconnectDelay: 5000,
-            onConnect: () => {
-                client.subscribe("/topic/globalNews", (message) => {
-                    const freshArticle = JSON.parse(message.body);
-                    setData((prev) => {
-                        if (!prev) return prev;
-                        const updatedNews = [freshArticle, ...(prev.latestNews || [])].slice(0, 20);
-                        const filteredLeaderboard = (prev.sentimentLeaderboard || []).filter(item => item.symbol !== freshArticle.symbol);
-                        const updatedLeaderboard = [{ symbol: freshArticle.symbol, score: freshArticle.sentimentScore || 50 }, ...filteredLeaderboard]
-                            .sort((a, b) => b.score - a.score).slice(0, 5);
-                        return { ...prev, latestNews: updatedNews, sentimentLeaderboard: updatedLeaderboard };
-                    });
-                });
+        const newsSub = subscribe("/topic/globalNews", (message) => {
+            if (!message.body) return;
+            const freshArticle = JSON.parse(message.body);
 
-                // 5-Second Debounced Rest API Fetcher
-                client.subscribe("/topic/market-update", () => {
-                    if (refreshTimeoutRef.current) return;
+            setData((prev) => {
+                if (!prev) return prev;
+                const updatedNews = [freshArticle, ...(prev.latestNews || [])].slice(0, 20);
+                const filteredLeaderboard = (prev.sentimentLeaderboard || []).filter(item => item.symbol !== freshArticle.symbol);
+                const updatedLeaderboard = [{ symbol: freshArticle.symbol, score: freshArticle.sentimentScore || 50 }, ...filteredLeaderboard]
+                    .sort((a, b) => b.score - a.score).slice(0, 5);
 
-                    refreshTimeoutRef.current = setTimeout(() => {
-                        fetchInitialState();
-                        refreshTimeoutRef.current = null;
-                    }, 5000);
-                });
-            }
+                return { ...prev, latestNews: updatedNews, sentimentLeaderboard: updatedLeaderboard };
+            });
         });
 
-        client.activate();
+        const updateSub = subscribe("/topic/market-update", () => {
+            if (refreshTimeoutRef.current) return;
+
+            refreshTimeoutRef.current = setTimeout(() => {
+                fetchInitialState();
+                refreshTimeoutRef.current = null;
+            }, 5000);
+        });
+
         return () => {
+            if (newsSub) newsSub.unsubscribe();
+            if (updateSub) updateSub.unsubscribe();
             if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
-            client.deactivate();
         };
-    }, []);
+    }, [isConnected]);
 
     if (loading) return <div style={{ color: "#fff", padding: "30px", fontSize: "14px" }}>Synchronizing Global Market Intelligence Feed...</div>;
     if (!data) return <div style={{ color: ui.theme?.danger || "#f44336", padding: "30px" }}>Error fetching structural data parameters.</div>;
@@ -91,7 +84,7 @@ function MarketFeed() {
     return (
         <div style={{ padding: "25px", backgroundColor: "#121212", minHeight: "100vh", color: "#e0e0e0", fontFamily: "sans-serif" }}>
 
-            {/* Top Macro Banner Container */}
+            {/* Top Macro Banner */}
             <div style={{ backgroundColor: "#1e1e1e", borderLeft: `4px solid ${ui.theme?.primary || "#387ed1"}`, padding: "15px 20px", borderRadius: "6px", marginBottom: "25px" }}>
                 <h3 style={{ margin: "0 0 8px 0", color: ui.theme?.primary || "#387ed1", fontSize: "15px", fontWeight: "700" }}>📊 AI MACRO INSIGHTS</h3>
                 <p style={{ margin: 0, fontSize: "13.5px", color: "#b3b3b3", lineHeight: "1.6" }}>{data.aiMarketSummary || "No macroeconomic summaries available."}</p>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import API from "../services/api";
 import * as ui from "../styles/style";
 import { useNavigate } from "react-router-dom";
@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { useWebSocket } from "../contexts/WebSocketContext";
 
 function Watchlist({ openOrderModal }) {
-    const { isConnected, subscribe } = useWebSocket(); // ✅ Use Global Socket
+    const { isConnected, subscribe } = useWebSocket();
     const [watchlist, setWatchlist] = useState([]);
     const [tabs, setTabs] = useState(["Watchlist 1"]);
     const [activeTab, setActiveTab] = useState("Watchlist 1");
@@ -34,60 +34,53 @@ function Watchlist({ openOrderModal }) {
         return () => window.removeEventListener("watchlistUpdated", fetchTabs);
     }, []);
 
-    // Initial Fetch & WebSocket Setup
     useEffect(() => {
-        let isMounted = true;
-        let sub = null;
-
-        const setupWatchlist = async () => {
+        const fetchInitialWatchlist = async () => {
             try {
                 const res = await API.get(`/api/watchlist?listName=${activeTab}`);
-                if (isMounted) setWatchlist(res.data);
+                setWatchlist(res.data);
             } catch (err) {
-                if (isMounted) setWatchlist([]);
-            }
-
-            if (isConnected) {
-                // Safely subscribe using the global hook
-                sub = subscribe("/topic/market-prices", (message) => {
-                    if (!message.body) return;
-                    const livePrices = JSON.parse(message.body);
-
-                    setWatchlist(currentList => {
-                        let hasChanges = false;
-                        const newList = currentList.map(item => {
-                            if (livePrices[item.symbol]) {
-                                const newLivePrice = parseFloat(livePrices[item.symbol]);
-                                if (newLivePrice !== item.price) {
-                                    hasChanges = true;
-                                    const isUp = newLivePrice >= item.price;
-                                    const newChange = item.basePrice > 0 ? ((newLivePrice - item.basePrice) / item.basePrice) * 100 : 0;
-                                    const flashColor = isUp ? "rgba(40, 167, 69, 0.25)" : "rgba(220, 53, 69, 0.25)";
-
-                                    setTimeout(() => {
-                                        if (isMounted) {
-                                            setWatchlist(list => list.map(s => s.symbol === item.symbol ? { ...s, flashColor: "transparent" } : s));
-                                        }
-                                    }, 400);
-
-                                    return { ...item, price: newLivePrice, changePercent: newChange, flashColor };
-                                }
-                            }
-                            return item;
-                        });
-                        return hasChanges ? newList : currentList;
-                    });
-                });
+                setWatchlist([]);
             }
         };
+        fetchInitialWatchlist();
+    }, [activeTab]);
 
-        setupWatchlist();
+    useEffect(() => {
+        if (!isConnected) return;
+
+        const sub = subscribe("/topic/market-prices", (message) => {
+            if (!message.body) return;
+            const livePrices = JSON.parse(message.body);
+
+            setWatchlist(currentList => {
+                let hasChanges = false;
+                const newList = currentList.map(item => {
+                    if (livePrices[item.symbol]) {
+                        const newLivePrice = parseFloat(livePrices[item.symbol]);
+                        if (newLivePrice !== item.price) {
+                            hasChanges = true;
+                            const isUp = newLivePrice >= item.price;
+                            const newChange = item.basePrice > 0 ? ((newLivePrice - item.basePrice) / item.basePrice) * 100 : 0;
+                            const flashColor = isUp ? "rgba(40, 167, 69, 0.25)" : "rgba(220, 53, 69, 0.25)";
+
+                            setTimeout(() => {
+                                setWatchlist(list => list.map(s => s.symbol === item.symbol ? { ...s, flashColor: "transparent" } : s));
+                            }, 400);
+
+                            return { ...item, price: newLivePrice, changePercent: newChange, flashColor };
+                        }
+                    }
+                    return item;
+                });
+                return hasChanges ? newList : currentList;
+            });
+        });
 
         return () => {
-            isMounted = false;
             if (sub) sub.unsubscribe();
         };
-    }, [activeTab, isConnected]);
+    }, [isConnected]);
 
     const handleTrade = (e, instrument, mode) => {
         e.stopPropagation();

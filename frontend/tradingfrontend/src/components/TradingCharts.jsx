@@ -68,7 +68,6 @@ function TradingChart({ symbol, currentPrice }) {
                 const apiResolution = resolutionMap[timeframe];
                 const res = await API.get(`/api/chart/${symbol}/${apiResolution}`);
                 
-                // ✅ CRITICAL GUARD: Stop execution if component unmounted during the API call
                 if (isDisposed.current) return;
 
                 let histData = res.data;
@@ -94,7 +93,6 @@ function TradingChart({ symbol, currentPrice }) {
                         });
                     }
 
-                    // ✅ Double check before setting data
                     if (!isDisposed.current) {
                          candlestickSeries.setData(histData);
                          lastCandleRef.current = histData[histData.length - 1];
@@ -130,7 +128,6 @@ function TradingChart({ symbol, currentPrice }) {
                 try {
                     chartRef.current.remove();
                 } catch(e) {
-                     // Catch any edge case where it's already removed
                 }
             }
             chartRef.current = null;
@@ -174,7 +171,6 @@ function TradingChart({ symbol, currentPrice }) {
         }
 
         try {
-            // ✅ One final safety check before updating the series
             if (!isDisposed.current && seriesRef.current) {
                 seriesRef.current.update(updatedCandle);
                 lastCandleRef.current = updatedCandle;

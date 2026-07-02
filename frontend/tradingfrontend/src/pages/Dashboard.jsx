@@ -14,7 +14,7 @@ const SummaryCard = ({ title, value }) => (
 );
 
 function Dashboard() {
-    const { isConnected, subscribe } = useWebSocket(); // ✅ Use Global Socket
+    const { isConnected, subscribe } = useWebSocket(); 
     const [holdings, setHoldings] = useState([]);
     const [realizedPnl, setRealizedPnl] = useState(0);
     const [unrealizedPnl, setUnrealizedPnl] = useState(0);
@@ -25,7 +25,6 @@ function Dashboard() {
     const totalPnl = currentValue - investedValue;
     const totalPnlPercent = investedValue > 0 ? ((totalPnl / investedValue) * 100).toFixed(2) : 0;
 
-    // 1. Initial REST API Fetch
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
@@ -47,11 +46,9 @@ function Dashboard() {
         fetchDashboardData();
     }, []);
 
-    // 2. Live WebSocket Subscriptions
     useEffect(() => {
-        if (!isConnected) return; // Wait until global socket is ready
+        if (!isConnected) return;
 
-        // Subscribe to Global Market Prices
         const priceSub = subscribe("/topic/market-prices", (message) => {
             if (!message.body) return;
             const livePrices = JSON.parse(message.body);
@@ -66,7 +63,6 @@ function Dashboard() {
 
         let holdingsSub = null;
         if (profile?.id) {
-            // Subscribe to Private User Holdings
             holdingsSub = subscribe(`/topic/holdings/${profile.id}`, (message) => {
                 if (message.body) {
                     setHoldings(JSON.parse(message.body));
@@ -74,12 +70,11 @@ function Dashboard() {
             });
         }
 
-        // Cleanup subscriptions on unmount
         return () => {
             if (priceSub) priceSub.unsubscribe();
             if (holdingsSub) holdingsSub.unsubscribe();
         };
-    }, [isConnected, profile?.id]); // Re-run if connection drops/reconnects or profile loads
+    }, [isConnected, profile?.id]);
 
     const username = localStorage.getItem("username") || "User";
 
@@ -115,7 +110,9 @@ function Dashboard() {
                         <h3 style={{ margin: 0, fontSize: "16px" }}>Holdings <span style={{ color: "#888", fontSize: "14px" }}>({holdings.length})</span></h3>
                     </div>
                     {holdings.length === 0 ? (
-                        <p style={{ padding: "60px", textAlign: "center", color: "#888" }}>Your portfolio is currently empty.</p>
+                        <p style={{ padding: "60px", textAlign: "center", color: "#888" }}>
+                            Your portfolio is currently empty.
+                        </p>
                     ) : (
                         <div style={ui.tableContainer}>
                             <table style={ui.table}>

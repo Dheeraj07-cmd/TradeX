@@ -3,7 +3,7 @@ import * as ui from "../styles/style";
 import { useWebSocket } from "../contexts/WebSocketContext";
 
 function LiveNews({ symbol }) {
-    const { isConnected, subscribe } = useWebSocket(); // ✅ Use Global Socket
+    const { isConnected, subscribe } = useWebSocket();
     const [news, setNews] = useState([]);
     const [sentiment, setSentiment] = useState({ score: 50, label: "NEUTRAL", color: "#888" });
     const [loading, setLoading] = useState(true);
